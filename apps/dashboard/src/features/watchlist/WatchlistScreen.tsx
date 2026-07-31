@@ -1,4 +1,7 @@
 import { useState, type FormEvent } from 'react';
+import { PriceCell } from '../prices/PriceCell';
+import { isStale } from '../prices/streamReducer';
+import { usePriceStream } from '../prices/usePriceStream';
 import { useAddItem, useRemoveItem, useWatchlist } from './useWatchlist';
 
 export function WatchlistScreen() {
@@ -6,6 +9,8 @@ export function WatchlistScreen() {
   const addItem = useAddItem();
   const removeItem = useRemoveItem();
   const [ticker, setTicker] = useState('');
+  const stream = usePriceStream();
+  const now = Date.now();
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -21,6 +26,10 @@ export function WatchlistScreen() {
   return (
     <section aria-labelledby="watchlist-heading">
       <h2 id="watchlist-heading">Watchlist</h2>
+
+      {stream.status === 'reconnecting' && (
+        <p role="status">Reconnecting to the price feed…</p>
+      )}
 
       <form onSubmit={handleSubmit}>
         <label htmlFor="add-ticker">Add ticker</label>
@@ -46,6 +55,12 @@ export function WatchlistScreen() {
         {data.items.map((item) => (
           <li key={item.ticker}>
             <span>{item.ticker}</span>
+            <PriceCell
+              ticker={item.ticker}
+              price={stream.prices[item.ticker]?.price}
+              stale={isStale(stream, item.ticker, now)}
+              disconnected={stream.status === 'reconnecting'}
+            />
             <button
               type="button"
               onClick={() => removeItem.mutate(item.ticker)}

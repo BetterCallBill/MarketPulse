@@ -3,8 +3,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { WatchlistScreen } from './WatchlistScreen';
+
+vi.mock('../prices/usePriceStream', () => ({
+  usePriceStream: () => ({ status: 'connected' as const, prices: {} }),
+}));
 
 const server = setupServer(
   http.get('http://localhost:5100/api/v1/watchlist', () =>
