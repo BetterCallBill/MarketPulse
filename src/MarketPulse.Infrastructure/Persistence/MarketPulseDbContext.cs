@@ -17,6 +17,7 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
             e.HasKey(x => x.Id);
             e.Property(x => x.Email).HasMaxLength(256).IsRequired();
             e.HasIndex(x => x.Email).IsUnique();
+            e.HasData(new User(SeedData.DevUserId, SeedData.DevUserEmail));
         });
 
         b.Entity<Ticker>(e =>
@@ -41,6 +42,13 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
             // at model-build time.
             e.Ignore(x => x.Items);
 
+            // Seed the dev user's watchlist itself. `HasData` cannot call `Watchlist.Create`
+            // (private constructor, and `Create` mints a random Id) so an anonymous type
+            // supplying just the mapped key/FK properties is used instead — EF only reads
+            // property values by name to build the migration's InsertData, it never
+            // constructs a real `Watchlist` instance from this.
+            e.HasData(new { Id = SeedData.DevWatchlistId, UserId = SeedData.DevUserId });
+
             e.OwnsMany<WatchlistItem>("_items", items =>
             {
                 items.ToTable("WatchlistItems");
@@ -48,6 +56,18 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
                 items.HasKey(x => x.Id);
                 items.Property(x => x.Ticker).HasMaxLength(8).IsRequired();
                 items.HasIndex(x => new { x.WatchlistId, x.Ticker }).IsUnique();
+
+                // Same reasoning as above: `WatchlistItem`'s real constructor is `internal`
+                // to the Domain assembly, so seeding uses anonymous types carrying the
+                // owned entity's key, its owner FK, and its data — fixed GUIDs and a fixed
+                // timestamp so the migration is deterministic across regenerations.
+                items.HasData(SeedData.DefaultWatchlist.Select((ticker, i) => new
+                {
+                    Id = SeedData.DefaultWatchlistItemIds[i],
+                    WatchlistId = SeedData.DevWatchlistId,
+                    Ticker = ticker,
+                    AddedUtc = SeedData.DevWatchlistItemsAddedUtc
+                }));
             });
         });
     }

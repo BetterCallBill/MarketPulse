@@ -4,6 +4,7 @@ using MarketPulse.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MarketPulse.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(MarketPulseDbContext))]
-    partial class MarketPulseDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731222223_SeedDevUserAndWatchlist")]
+    partial class SeedDevUserAndWatchlist
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -39,7 +42,7 @@ namespace MarketPulse.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Code");
 
-                    b.ToTable("Tickers", (string)null);
+                    b.ToTable("Tickers");
 
                     b.HasData(
                         new
@@ -210,7 +213,7 @@ namespace MarketPulse.Infrastructure.Persistence.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
 
                     b.HasData(
                         new
@@ -234,7 +237,7 @@ namespace MarketPulse.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("Watchlists", (string)null);
+                    b.ToTable("Watchlists");
 
                     b.HasData(
                         new

@@ -7,8 +7,28 @@ public static class SeedData
     public static readonly Guid DevUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     public const string DevUserEmail = "dev@marketpulse.local";
 
+    /// <summary>Fixed id for the dev user's seeded watchlist. `HasData` requires a stable key.</summary>
+    public static readonly Guid DevWatchlistId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
+    /// <summary>
+    /// Fixed timestamp for the dev user's seeded watchlist items. `HasData` requires
+    /// deterministic values — `DateTimeOffset.UtcNow` would produce a new migration diff
+    /// on every run.
+    /// </summary>
+    public static readonly DateTimeOffset DevWatchlistItemsAddedUtc =
+        new(2026, 7, 31, 0, 0, 0, TimeSpan.Zero);
+
     /// <summary>Seeded on the dev user's watchlist at first run.</summary>
     public static readonly string[] DefaultWatchlist = ["IVV", "NDQ", "VHY", "FANG"];
+
+    /// <summary>Fixed ids for the seeded watchlist items, positionally paired with <see cref="DefaultWatchlist"/>.</summary>
+    public static readonly IReadOnlyList<Guid> DefaultWatchlistItemIds =
+    [
+        Guid.Parse("33333333-3333-3333-3333-333333333001"),
+        Guid.Parse("33333333-3333-3333-3333-333333333002"),
+        Guid.Parse("33333333-3333-3333-3333-333333333003"),
+        Guid.Parse("33333333-3333-3333-3333-333333333004")
+    ];
 
     public static readonly IReadOnlyList<Ticker> ReferenceTickers =
     [
