@@ -120,7 +120,7 @@ packages/emitter        # Standalone ES module event emitter
 | Layer | Technology |
 |---|---|
 | **Backend** | .NET 10, ASP.NET Core, MediatR, FluentValidation, SignalR |
-| **Data** | SQL Server (RDS), EF Core 8, Dapper (read-heavy paths) |
+| **Data** | SQL Server (RDS), EF Core 10, Dapper (read-heavy paths) |
 | **Messaging** | RabbitMQ, outbox pattern, Polly |
 | **Frontend** | React 18, TypeScript (strict), Vite, TanStack Query, Zustand, zod |
 | **Design system** | Storybook, CSS custom properties, @tanstack/react-virtual |

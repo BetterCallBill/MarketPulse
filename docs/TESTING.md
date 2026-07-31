@@ -11,7 +11,7 @@ Trophy-shaped: heaviest at integration, thin but present at unit and end-to-end.
 | Architecture | xUnit + reflection | `Domain` references nothing outside the BCL |
 | Backend integration | WebApplicationFactory + Testcontainers | Real SQL Server, real migration, real HTTP |
 | Frontend unit | Vitest | Stream reducer, zod schemas, `useNow`/`usePriceStream`/`PriceCell` hooks (stale-clock, initial-connect-failure) |
-| Frontend integration | Vitest + RTL + MSW | Watchlist screen, optimistic add, 409 error path |
+| Frontend integration | Vitest + RTL + MSW | Watchlist screen render, 409-duplicate error path |
 
 ## Deliberately not tested in slice 1
 
