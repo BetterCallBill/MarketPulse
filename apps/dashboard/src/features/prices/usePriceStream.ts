@@ -30,7 +30,10 @@ export function usePriceStream() {
     connection.onreconnected(() => dispatch({ type: 'connected' }));
     connection.onclose(() => dispatch({ type: 'reconnecting' }));
 
-    void connection.start().then(() => dispatch({ type: 'connected' }));
+    connection
+      .start()
+      .then(() => dispatch({ type: 'connected' }))
+      .catch(() => dispatch({ type: 'reconnecting' }));
 
     return () => {
       if (connection.state !== HubConnectionState.Disconnected) {

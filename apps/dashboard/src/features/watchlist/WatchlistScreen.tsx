@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { PriceCell } from '../prices/PriceCell';
 import { isStale } from '../prices/streamReducer';
+import { useNow } from '../prices/useNow';
 import { usePriceStream } from '../prices/usePriceStream';
 import { useAddItem, useRemoveItem, useWatchlist } from './useWatchlist';
 
@@ -10,7 +11,7 @@ export function WatchlistScreen() {
   const removeItem = useRemoveItem();
   const [ticker, setTicker] = useState('');
   const stream = usePriceStream();
-  const now = Date.now();
+  const now = useNow();
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
