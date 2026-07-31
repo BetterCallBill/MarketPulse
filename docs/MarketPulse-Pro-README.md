@@ -4,7 +4,7 @@
 
 > Users register, build watchlists and mock portfolios, receive real-time prices over WebSocket, and set price alerts that are evaluated server-side and delivered through a message queue. One sentence to describe — fifteen interview categories deep.
 
-[![CI](https://img.shields.io/badge/CI-GitHub_Actions-blue)]() [![Backend](https://img.shields.io/badge/.NET-8.0-512BD4)]() [![Frontend](https://img.shields.io/badge/React-18-61DAFB)]() [![IaC](https://img.shields.io/badge/Terraform-AWS-844FBA)]() [![License](https://img.shields.io/badge/license-MIT-green)]()
+[![CI](https://img.shields.io/badge/CI-GitHub_Actions-blue)]() [![Backend](https://img.shields.io/badge/.NET-10.0-512BD4)]() [![Frontend](https://img.shields.io/badge/React-18-61DAFB)]() [![IaC](https://img.shields.io/badge/Terraform-AWS-844FBA)]() [![License](https://img.shields.io/badge/license-MIT-green)]()
 
 **Author:** Billy ([BetterCallBill](https://github.com/BetterCallBill)) · Sydney, Australia
 
@@ -49,7 +49,7 @@ MarketPulse Pro is deliberately scoped so that **every major mid-to-senior full-
                 │ HTTPS (REST /api/v1)        │ WebSocket (SignalR)
                 ▼                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     ASP.NET Core 8 — ECS Fargate                    │
+│                     ASP.NET Core 10 — ECS Fargate                   │
 │  ┌──────────────────────┐   ┌──────────────────────┐                │
 │  │  Portfolio Module    │   │  Market Data Module  │  Modular       │
 │  │  (Controllers, EF)   │   │  (Minimal APIs,      │  Monolith      │
@@ -65,7 +65,7 @@ MarketPulse Pro is deliberately scoped so that **every major mid-to-senior full-
                                           ▼
                               ┌───────────────────────┐
                               │   Alerts Microservice │
-                              │   (.NET 8 Worker)     │
+                              │   (.NET 10 Worker)    │
                               └───────────────────────┘
 
      ┌────────────────┐          ┌─────────────────────────┐
@@ -119,7 +119,7 @@ packages/emitter        # Standalone ES module event emitter
 
 | Layer | Technology |
 |---|---|
-| **Backend** | .NET 8, ASP.NET Core, MediatR, FluentValidation, SignalR |
+| **Backend** | .NET 10, ASP.NET Core, MediatR, FluentValidation, SignalR |
 | **Data** | SQL Server (RDS), EF Core 8, Dapper (read-heavy paths) |
 | **Messaging** | RabbitMQ, outbox pattern, Polly |
 | **Frontend** | React 18, TypeScript (strict), Vite, TanStack Query, Zustand, zod |
@@ -181,7 +181,7 @@ packages/emitter        # Standalone ES module event emitter
 
 ### Tier 2 — Framework & platform depth
 
-#### 4. .NET 8 / ASP.NET Core framework depth
+#### 4. .NET 10 / ASP.NET Core framework depth
 
 **Where:** `MarketPulse.Api/`
 
@@ -216,7 +216,7 @@ packages/emitter        # Standalone ES module event emitter
 
 - **REST maturity & versioning:** resource-oriented `/api/v1/` endpoints with a documented versioning strategy
 - **AuthN/AuthZ:** JWT access + refresh tokens, OIDC social login, policy-based authorization
-- **Rate limiting:** .NET 8 built-in `RateLimiter` middleware with per-user partitions
+- **Rate limiting:** .NET 10 built-in `RateLimiter` middleware with per-user partitions
 - **Idempotency:** idempotency keys on order/alert creation, stored and replayed server-side
 - **Error handling:** RFC 7807 ProblemDetails everywhere, mapped from a domain error taxonomy
 
@@ -353,7 +353,7 @@ marketpulse-pro/
 
 ### Prerequisites
 
-- .NET 8 SDK · Node.js 20+ · pnpm · Docker Desktop
+- .NET 10 SDK · Node.js 20+ · pnpm · Docker Desktop
 
 ### Local development
 
