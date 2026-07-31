@@ -1,5 +1,6 @@
 using MarketPulse.Application.Abstractions;
 using MarketPulse.Infrastructure.Persistence;
+using MarketPulse.Infrastructure.RealTime;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,6 +14,8 @@ public static class InfrastructureServiceCollectionExtensions
     {
         services.AddDbContext<MarketPulseDbContext>(o => o.UseSqlServer(connectionString));
         services.AddScoped<IWatchlistRepository, WatchlistRepository>();
+        services.AddSingleton<PriceTickChannel>();
+        services.AddHostedService<FakeTickService>();
         return services;
     }
 }

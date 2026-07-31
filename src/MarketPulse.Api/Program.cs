@@ -1,5 +1,7 @@
+using MarketPulse.Api.Hubs;
 using MarketPulse.Api.Middleware;
 using MarketPulse.Api;
+using MarketPulse.Api.RealTime;
 using MarketPulse.Application;
 using MarketPulse.Application.Abstractions;
 using MarketPulse.Infrastructure;
@@ -11,6 +13,8 @@ var connectionString = builder.Configuration.GetConnectionString("MarketPulse")
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
+builder.Services.AddSignalR();
+builder.Services.AddHostedService<TickBroadcaster>();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddHttpContextAccessor();
@@ -33,6 +37,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+app.MapHub<PriceHub>("/hubs/prices");
 
 app.Run();
 
