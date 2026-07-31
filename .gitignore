@@ -1,1 +1,15 @@
 .DS_Store
+
+# .NET
+bin/
+obj/
+*.user
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Env
+.env
+.env.local
