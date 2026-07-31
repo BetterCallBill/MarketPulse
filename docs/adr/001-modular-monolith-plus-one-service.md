@@ -23,7 +23,7 @@ splitting it would buy distributed-transaction problems and no independent scali
 ## Rejected alternatives
 
 - **Pure monolith.** Simpler, but forfeits any demonstration of messaging, idempotent
-  consumers, or eventual consistency — categories 11 in the interview map.
+  consumers, or eventual consistency — category 11 in the interview map.
 - **Microservices throughout.** Four or five services would each need their own pipeline,
   database, and observability wiring, for a system with one user. The cost is real and the
   benefit is imaginary at this size.
