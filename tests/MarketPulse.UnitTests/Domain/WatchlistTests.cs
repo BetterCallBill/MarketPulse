@@ -58,6 +58,21 @@ public class WatchlistTests
     }
 
     [Fact]
+    public void AddItem_reports_full_not_duplicate_when_at_capacity()
+    {
+        var watchlist = Watchlist.Create(UserId);
+        watchlist.AddItem("IVV");
+        for (var i = 1; i < 20; i++)
+        {
+            watchlist.AddItem($"TK{i:D2}");
+        }
+
+        // With 20 items, adding a duplicate should throw WatchlistFullException
+        // because capacity is checked before duplicate uniqueness
+        Assert.Throws<WatchlistFullException>(() => watchlist.AddItem("IVV"));
+    }
+
+    [Fact]
     public void RemoveItem_removes_the_ticker()
     {
         var watchlist = Watchlist.Create(UserId);
