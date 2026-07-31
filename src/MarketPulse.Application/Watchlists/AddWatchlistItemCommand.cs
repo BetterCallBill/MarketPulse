@@ -12,8 +12,8 @@ public sealed class AddWatchlistItemValidator : AbstractValidator<AddWatchlistIt
     public AddWatchlistItemValidator(IWatchlistRepository repo)
     {
         RuleFor(x => x.Ticker)
-            .NotEmpty().WithMessage("Ticker is required.")
-            .MaximumLength(8).WithMessage("Ticker must be 8 characters or fewer.")
+            .NotEmpty().WithMessage("Ticker is required.").WithErrorCode("invalid-ticker")
+            .MaximumLength(8).WithMessage("Ticker must be 8 characters or fewer.").WithErrorCode("invalid-ticker")
             .MustAsync(async (ticker, ct) =>
                 await repo.TickerExistsAsync(ticker.Trim().ToUpperInvariant(), ct))
             .WithMessage(x => $"'{x.Ticker}' is not a known ticker.")
