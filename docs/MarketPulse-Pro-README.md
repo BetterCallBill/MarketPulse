@@ -351,11 +351,35 @@ marketpulse-pro/
 
 ## Getting started
 
+### Slice 1 — what actually runs today
+
+These four commands are the real, runnable path on this branch. The "Local development"
+block further down describes the target shape for later phases (an Alerts worker, RabbitMQ,
+E2E tests) — none of that exists yet, so don't run it expecting it to work.
+
+```bash
+# 1. Start infrastructure (SQL Server)
+docker compose up -d
+
+# 2. Apply database migrations (creates the schema and seeds reference tickers +
+#    the dev user's watchlist; safe to re-run)
+dotnet ef database update --project src/MarketPulse.Infrastructure
+
+# 3. Start the API (serves REST + the SignalR hub) — http://localhost:5100
+dotnet run --project src/MarketPulse.Api
+
+# 4. Start the dashboard — http://localhost:5173
+pnpm install && pnpm --filter @marketpulse/dashboard dev
+```
+
+The dashboard talks to the API at `http://localhost:5100` by default; override with the
+`VITE_API_URL` environment variable if you run the API on a different port.
+
 ### Prerequisites
 
 - .NET 10 SDK · Node.js 20+ · pnpm · Docker Desktop
 
-### Local development
+### Local development (aspirational — describes later phases, not yet runnable)
 
 ```bash
 # 1. Start infrastructure (SQL Server + RabbitMQ)
