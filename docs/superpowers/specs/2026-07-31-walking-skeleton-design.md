@@ -32,6 +32,7 @@ already exists instead of introducing a new one.
 | Seams proven | CRUD **and** one live tick | CRUD-only defers the hardest problem; real-time-only leaves EF Core and migrations untested |
 | Pipeline reach | Local + green CI | Full AWS deploy roughly doubles the slice, starts the RDS bill now, and makes Terraform debugging dominate week 1 |
 | Identity | Stubbed dev user | Real JWT + refresh + OIDC is a slice of its own; no-user-concept makes per-user query scoping a later retrofit |
+| Runtime | **.NET 10**, not .NET 8 | .NET 8 reaches end-of-life in November 2026 — four months out — and only the .NET 10 SDK (10.0.302) is installed. Shipping a showcase on an EOL runtime is hard to defend; the parent README's .NET 8 references are amended in Task 11 of the plan |
 
 ---
 
