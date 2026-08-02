@@ -15,4 +15,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Authentication\CommonPasswords.txt" />
+  </ItemGroup>
+
 </Project>
