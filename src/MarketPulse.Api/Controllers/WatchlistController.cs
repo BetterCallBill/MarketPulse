@@ -1,10 +1,12 @@
 using MarketPulse.Application.Watchlists;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MarketPulse.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/v1/watchlist")]
 public sealed class WatchlistController(ISender sender) : ControllerBase
 {

@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using MarketPulse.Application.Watchlists;
-using MarketPulse.Domain.Entities;
 using MarketPulse.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -32,24 +31,9 @@ public class WatchlistApiTests(SqlServerFixture fixture) : IAsyncLifetime
             });
         });
 
-        _client = _factory.CreateClient();
-
-        await using var db = fixture.CreateContext();
-        if (!await db.Users.AnyAsync(u => u.Id == SeedData.DevUserId))
-        {
-            db.Users.Add(new User(
-                SeedData.DevUserId, SeedData.DevUserEmail,
-                SeedData.DevUserPasswordHash, SeedData.DevUserCreatedUtc));
-            await db.SaveChangesAsync();
-        }
-
-        var existing = await db.Watchlists
-            .FirstOrDefaultAsync(w => w.UserId == SeedData.DevUserId);
-        if (existing is not null)
-        {
-            db.Watchlists.Remove(existing);
-            await db.SaveChangesAsync();
-        }
+        // A fresh account per test class run: an empty watchlist with no seeded items,
+        // and no cross-test interference through the shared dev user.
+        _client = await AuthenticatedClient.RegisterAsync(_factory);
     }
 
     [Fact]

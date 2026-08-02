@@ -16,7 +16,20 @@ public sealed class ExceptionHandlingMiddleware(
         }
         catch (DomainException ex)
         {
-            await WriteAsync(context, StatusCodes.Status409Conflict, ex.ErrorCode, ex.Message);
+            if (ex is AccountLockedException locked && !context.Response.HasStarted)
+            {
+                context.Response.Headers.RetryAfter =
+                    ((int)Math.Ceiling(locked.RetryAfter.TotalSeconds)).ToString();
+            }
+
+            await WriteAsync(context, ex.StatusCode, ex.ErrorCode, ex.Message);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // ICurrentUser throws this when no authenticated principal is on the request.
+            // Slice 1 let it fall through to a 500; it is a 401.
+            await WriteAsync(context, StatusCodes.Status401Unauthorized,
+                "unauthenticated", "Authentication is required.");
         }
         catch (ValidationException ex)
         {

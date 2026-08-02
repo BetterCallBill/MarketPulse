@@ -28,11 +28,14 @@ public class PriceStreamTests(SqlServerFixture fixture)
             });
         });
 
+        var accessCookie = await AuthenticatedClient.RegisterAndGetAccessCookieAsync(factory);
+
         var connection = new HubConnectionBuilder()
             .WithUrl("http://localhost/hubs/prices", o =>
             {
                 o.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
                 o.Transports = HttpTransportType.LongPolling;
+                o.Headers["Cookie"] = accessCookie;
             })
             .Build();
 
@@ -49,6 +52,35 @@ public class PriceStreamTests(SqlServerFixture fixture)
 
         Assert.Same(received.Task, completed);
         Assert.False(string.IsNullOrWhiteSpace(await received.Task));
+    }
+
+    [Fact]
+    public async Task An_unauthenticated_client_cannot_connect_to_the_hub()
+    {
+        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseEnvironment(Environments.Development);
+            b.ConfigureServices(services =>
+            {
+                var descriptor = services.Single(
+                    d => d.ServiceType == typeof(DbContextOptions<MarketPulseDbContext>));
+                services.Remove(descriptor);
+                services.AddDbContext<MarketPulseDbContext>(
+                    o => o.UseSqlServer(fixture.ConnectionString));
+            });
+        });
+
+        var connection = new HubConnectionBuilder()
+            .WithUrl("http://localhost/hubs/prices", o =>
+            {
+                o.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                o.Transports = HttpTransportType.LongPolling;
+            })
+            .Build();
+
+        await Assert.ThrowsAnyAsync<Exception>(() => connection.StartAsync());
+
+        await connection.DisposeAsync();
     }
 
     private sealed record TickPayload(string Ticker, decimal Price, DateTimeOffset TimestampUtc);
