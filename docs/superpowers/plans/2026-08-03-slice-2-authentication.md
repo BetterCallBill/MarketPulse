@@ -507,6 +507,86 @@ git commit -m "feat: add credentials, lockout, and refresh tokens to the domain"
   - `PasswordPolicy.MinimumLength : int`, `PasswordPolicy.IsAcceptable(string password) : bool`
   - `AuthResult` record
 
+- [ ] **Step 0: Unblock the build**
+
+Task 1 changed the `User` constructor, so `MarketPulseDbContext` no longer compiles — and because `MarketPulse.UnitTests` references `MarketPulse.Infrastructure`, **no unit test in this repo can run until this is fixed.** Do this before anything else, or every TDD step in this task and the next is blind.
+
+First generate the seeded dev user's password hash. `PasswordHasher<T>` salts randomly, so it cannot be computed inside `HasData` and must be a committed constant. Add a throwaway test that fails on purpose to print it:
+
+```csharp
+// tests/MarketPulse.UnitTests/Infrastructure/HashGen.cs  (DELETE after this step)
+using Microsoft.AspNetCore.Identity;
+using MarketPulse.Domain.Entities;
+
+namespace MarketPulse.UnitTests.Infrastructure;
+
+public class HashGen
+{
+    [Fact]
+    public void Print()
+    {
+        var user = new User(Guid.Empty, "x@y.z", string.Empty, DateTimeOffset.UnixEpoch);
+        Assert.Fail(new PasswordHasher<User>().HashPassword(user, "DevPassw0rd!2026"));
+    }
+}
+```
+
+This needs the hasher package on the Infrastructure project (Task 3 Step 1 adds it too; adding it here is fine and idempotent):
+
+```bash
+dotnet add src/MarketPulse.Infrastructure package Microsoft.Extensions.Identity.Core
+```
+
+Verify `Directory.Packages.props` got a concrete version, that the `.csproj` `PackageReference` carries no `Version` attribute, and that the props file still ends with a newline (`tail -c 1 Directory.Packages.props | xxd | tail -1` → `0a`).
+
+Run `dotnet test tests/MarketPulse.UnitTests --filter FullyQualifiedName~HashGen`, copy the `AQAAAA…` value from the failure message, then **delete `HashGen.cs`**.
+
+Now add to `src/MarketPulse.Infrastructure/Persistence/SeedData.cs`, below `DevUserEmail`:
+
+```csharp
+    /// <summary>
+    /// Development-only credentials, documented in the README so a clean clone can sign in.
+    /// Accepted showcase trade-off, recorded in the slice 2 spec: the hash must be a literal
+    /// because `PasswordHasher<T>` salts randomly and `HasData` requires determinism.
+    /// The hardening slice removes this account.
+    /// </summary>
+    public const string DevUserPassword = "DevPassw0rd!2026";
+
+    /// <summary>PBKDF2 hash of <see cref="DevUserPassword"/>. Regenerate only if that changes.</summary>
+    public const string DevUserPasswordHash = "PASTE_THE_GENERATED_HASH_HERE";
+
+    /// <summary>Fixed creation timestamp — `HasData` must be deterministic across regenerations.</summary>
+    public static readonly DateTimeOffset DevUserCreatedUtc =
+        new(2026, 8, 3, 0, 0, 0, TimeSpan.Zero);
+```
+
+Then in `src/MarketPulse.Infrastructure/Persistence/MarketPulseDbContext.cs`, change **only** the seed line inside the existing `b.Entity<User>` block:
+
+```csharp
+            e.HasData(new User(
+                SeedData.DevUserId,
+                SeedData.DevUserEmail,
+                SeedData.DevUserPasswordHash,
+                SeedData.DevUserCreatedUtc));
+```
+
+Leave the rest of that block alone — Task 4 adds the new column mappings and the `RefreshTokens` table.
+
+Verify the build is unblocked:
+
+```bash
+dotnet test tests/MarketPulse.UnitTests
+```
+
+Expected: builds, and all slice 1 unit tests plus Task 1's 11 new tests pass. `MarketPulse.IntegrationTests` will still not build — Task 4 repairs it. Do not touch it here.
+
+Commit this separately so the unblock is legible in history:
+
+```bash
+git add src/MarketPulse.Infrastructure Directory.Packages.props
+git commit -m "fix: seed the dev user with a password hash so the build compiles"
+```
+
 - [ ] **Step 1: Write the failing password policy tests**
 
 Create `tests/MarketPulse.UnitTests/Application/PasswordPolicyTests.cs`:
@@ -1133,51 +1213,29 @@ git commit -m "feat: add password hashing and JWT token minting"
 - Consumes: `User`, `RefreshToken` (Task 1); `IUserRepository`, `IRefreshTokenRepository` (Task 2); `PasswordHasherAdapter`, `JwtTokenService` (Task 3).
 - Produces: `MarketPulseDbContext.RefreshTokens : DbSet<RefreshToken>`; `SeedData.DevUserPasswordHash : string`; `SeedData.DevUserPassword : string`; `AddInfrastructure` now registers `IUserRepository`, `IRefreshTokenRepository`, `IPasswordHasher`, `ITokenService`.
 
-- [ ] **Step 1: Generate the dev user's password hash**
+- [ ] **Step 1: Repair the integration test project**
 
-`PasswordHasher<T>` salts randomly, so the hash cannot be computed inside `HasData` — it must be a committed constant. Generate one with a throwaway test that fails on purpose to print the value:
+`MarketPulse.IntegrationTests` has not compiled since Task 1 changed the `User` constructor, so nothing in this task can be verified until it does. Two files call it:
 
-```csharp
-// tests/MarketPulse.UnitTests/Infrastructure/HashGen.cs  (DELETE after this step)
-using MarketPulse.Infrastructure.Authentication;
-
-namespace MarketPulse.UnitTests.Infrastructure;
-
-public class HashGen
-{
-    [Fact]
-    public void Print() => Assert.Fail(new PasswordHasherAdapter().Hash("DevPassw0rd!2026"));
-}
-```
-
-Run: `dotnet test tests/MarketPulse.UnitTests --filter FullyQualifiedName~HashGen`
-
-Copy the hash from the failure message, then **delete `HashGen.cs`**. The value is a long base64 string beginning `AQAAAA`.
-
-- [ ] **Step 2: Add the seed constants**
-
-In `src/MarketPulse.Infrastructure/Persistence/SeedData.cs`, add below `DevUserEmail`:
+`tests/MarketPulse.IntegrationTests/WatchlistPersistenceTests.cs` — **lines 25 and 47**. Add the two new arguments, keeping each call's own variable name (`write` on line 25, `writeDb` on line 47) and the existing `userId`:
 
 ```csharp
-    /// <summary>
-    /// Development-only credentials, documented in the README so a clean clone can sign in.
-    /// Accepted showcase trade-off, recorded in the slice 2 spec: the hash must be a literal
-    /// because `PasswordHasher<T>` salts randomly and `HasData` requires determinism.
-    /// The hardening slice removes this account.
-    /// </summary>
-    public const string DevUserPassword = "DevPassw0rd!2026";
-
-    /// <summary>PBKDF2 hash of <see cref="DevUserPassword"/>. Regenerate only if that changes.</summary>
-    public const string DevUserPasswordHash = "PASTE_THE_HASH_FROM_STEP_1";
-
-    /// <summary>Fixed creation timestamp — `HasData` must be deterministic across regenerations.</summary>
-    public static readonly DateTimeOffset DevUserCreatedUtc =
-        new(2026, 8, 3, 0, 0, 0, TimeSpan.Zero);
+            write.Users.Add(new User(userId, $"{userId}@test.local", "hash", DateTimeOffset.UtcNow));
 ```
 
-Replace `PASTE_THE_HASH_FROM_STEP_1` with the actual value from Step 1.
+`tests/MarketPulse.IntegrationTests/WatchlistApiTests.cs` — **line 40**, inside `InitializeAsync`:
 
-- [ ] **Step 3: Map the new columns and the RefreshTokens table**
+```csharp
+            db.Users.Add(new User(
+                SeedData.DevUserId, SeedData.DevUserEmail,
+                SeedData.DevUserPasswordHash, SeedData.DevUserCreatedUtc));
+```
+
+These are mechanical compile fixes only — do not restructure either test. Task 6 rewrites `WatchlistApiTests` properly once authentication exists.
+
+Verify: `dotnet build tests/MarketPulse.IntegrationTests` succeeds.
+
+- [ ] **Step 2: Map the new columns and the RefreshTokens table**
 
 In `src/MarketPulse.Infrastructure/Persistence/MarketPulseDbContext.cs`, add the DbSet beside the others:
 
@@ -1225,7 +1283,7 @@ Add a new block after it:
         });
 ```
 
-- [ ] **Step 4: Add the repositories**
+- [ ] **Step 3: Add the repositories**
 
 Create `src/MarketPulse.Infrastructure/Persistence/UserRepository.cs`:
 
@@ -1289,7 +1347,7 @@ public sealed class RefreshTokenRepository(MarketPulseDbContext db) : IRefreshTo
 }
 ```
 
-- [ ] **Step 5: Register everything in DI**
+- [ ] **Step 4: Register everything in DI**
 
 Replace the body of `AddInfrastructure` in `src/MarketPulse.Infrastructure/DependencyInjection.cs`:
 
@@ -1307,7 +1365,7 @@ Replace the body of `AddInfrastructure` in `src/MarketPulse.Infrastructure/Depen
 
 Add `using MarketPulse.Infrastructure.Authentication;` at the top.
 
-- [ ] **Step 6: Generate the migration**
+- [ ] **Step 5: Generate the migration**
 
 ```bash
 export MARKETPULSE_SA_PASSWORD='Local!Dev!Pass123'
@@ -1318,7 +1376,7 @@ dotnet ef migrations add AddAuthentication \
 
 Read the generated migration and confirm it: adds `PasswordHash`, `CreatedUtc`, `FailedLoginCount`, `LockoutEndUtc` to `Users`; creates `RefreshTokens` with both indexes; and issues an `UpdateData` for the seeded dev user's new columns. It must **not** touch `Watchlists` or `WatchlistItems` — if it does, something in Task 1 changed the watchlist model and must be reverted.
 
-- [ ] **Step 7: Write the failing persistence tests**
+- [ ] **Step 6: Write the failing persistence tests**
 
 Create `tests/MarketPulse.IntegrationTests/AuthPersistenceTests.cs`:
 
@@ -1397,14 +1455,14 @@ public class AuthPersistenceTests(SqlServerFixture fixture)
 }
 ```
 
-- [ ] **Step 8: Run the integration tests**
+- [ ] **Step 7: Run the integration tests**
 
 Run: `dotnet test tests/MarketPulse.IntegrationTests --filter FullyQualifiedName~AuthPersistenceTests`
 Expected: 3 passed. Testcontainers starts a real SQL Server and applies the new migration.
 
-If `GetByEmailAsync` throws a translation error, apply the fallback described in Step 4 and re-run.
+If `GetByEmailAsync` throws a translation error, apply the fallback described in Step 3 and re-run.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/MarketPulse.Infrastructure tests/MarketPulse.IntegrationTests/AuthPersistenceTests.cs
@@ -2780,11 +2838,7 @@ public class AuthApiTests(SqlServerFixture fixture) : IAsyncLifetime
 
 - [ ] **Step 14: Repair the slice 1 integration tests**
 
-The `User` constructor gained two parameters, and the watchlist endpoints now require a session. Find every call site:
-
-```bash
-grep -rn "new User(" tests/ src/
-```
+Task 4 already made these files *compile*. What changes now is different: the watchlist endpoints require a session, so the tests must authenticate.
 
 In `tests/MarketPulse.IntegrationTests/WatchlistApiTests.cs`, replace `InitializeAsync` and the field declarations so each run gets its own registered user instead of reusing the seeded dev account:
 
@@ -2813,15 +2867,9 @@ In `tests/MarketPulse.IntegrationTests/WatchlistApiTests.cs`, replace `Initializ
     }
 ```
 
-Delete the now-unused `using MarketPulse.Domain.Entities;` and the manual user/watchlist seeding block. The four test methods themselves need no changes.
+Delete the now-unused `using MarketPulse.Domain.Entities;` and the manual user/watchlist seeding block that Task 4 patched — registering a fresh user replaces it entirely. The four test methods themselves need no changes.
 
-`tests/MarketPulse.IntegrationTests/WatchlistPersistenceTests.cs` constructs `User` on **lines 25 and 47**; both become four-argument calls, keeping the existing `userId` because the watchlist rows are keyed to it:
-
-```csharp
-            write.Users.Add(new User(userId, $"{userId}@test.local", "hash", DateTimeOffset.UtcNow));
-```
-
-(the second call site uses `writeDb` rather than `write` — keep its own variable name).
+`WatchlistPersistenceTests.cs` needs nothing further: it exercises the repository directly rather than going through HTTP, so authorization does not apply to it.
 
 `PriceStreamTests` connects to the hub, which is now `[Authorize]`. `HttpConnectionOptions.Cookies` is only honoured when the transport builds its own `HttpClientHandler`, and this test supplies `HttpMessageHandlerFactory` instead — so set the header directly.
 
