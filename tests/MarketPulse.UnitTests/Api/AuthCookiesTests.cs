@@ -39,13 +39,17 @@ public class AuthCookiesTests
         var options = AuthCookies.Build(
             isDevelopment: true, SameSiteMode.Strict, Expires, AuthCookies.RefreshPath);
 
-        Assert.Equal("/api/v1/auth/refresh", options.Path);
+        Assert.Equal("/api/v1/auth", options.Path);
         Assert.Equal(SameSiteMode.Strict, options.SameSite);
     }
 
+    /// <summary>
+    /// Scoped to the auth endpoints rather than to `/api/v1/auth/refresh`: the narrower
+    /// path would withhold the cookie from logout, leaving nothing to revoke server-side.
+    /// </summary>
     [Fact]
-    public void The_refresh_cookie_is_scoped_to_the_refresh_endpoint()
+    public void The_refresh_cookie_is_scoped_to_the_auth_endpoints()
     {
-        Assert.Equal("/api/v1/auth/refresh", AuthCookies.RefreshPath);
+        Assert.Equal("/api/v1/auth", AuthCookies.RefreshPath);
     }
 }

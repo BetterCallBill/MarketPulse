@@ -11,10 +11,13 @@ public static class AuthCookies
     public const string Csrf = "mp_csrf";
 
     /// <summary>
-    /// The refresh cookie is scoped to the one endpoint that consumes it, so it is not
-    /// transmitted on any other request.
+    /// The refresh cookie is scoped to the auth endpoints, so it never rides a watchlist,
+    /// hub, or health request. It cannot be narrowed to `/api/v1/auth/refresh`: RFC 6265
+    /// path-matching would then withhold it from `/api/v1/auth/logout`, so logout could
+    /// never see the token it has to revoke, and every issued refresh token would stay
+    /// live for its full lifetime after signing out.
     /// </summary>
-    public const string RefreshPath = "/api/v1/auth/refresh";
+    public const string RefreshPath = "/api/v1/auth";
 
     public static CookieOptions Build(
         bool isDevelopment,

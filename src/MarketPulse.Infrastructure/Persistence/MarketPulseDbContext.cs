@@ -79,6 +79,17 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
                 items.ToTable("WatchlistItems");
                 items.WithOwner().HasForeignKey(x => x.WatchlistId);
                 items.HasKey(x => x.Id);
+
+                // The Domain mints this id itself, exactly as `User`, `Watchlist` and
+                // `RefreshToken` do. EF's convention for a Guid key is otherwise
+                // "generated on add", and it uses "is the key already set?" to classify a
+                // dependent it discovers on a *loaded* principal: a set key reads as "this
+                // row exists", so it emits an UPDATE that matches no row and throws
+                // DbUpdateConcurrencyException instead of inserting. Telling EF the id is
+                // never store-generated makes it classify the new item as Added.
+                // Schema-neutral — this changes classification, not the column.
+                items.Property(x => x.Id).ValueGeneratedNever();
+
                 items.Property(x => x.Ticker).HasMaxLength(8).IsRequired();
                 items.HasIndex(x => new { x.WatchlistId, x.Ticker }).IsUnique();
 

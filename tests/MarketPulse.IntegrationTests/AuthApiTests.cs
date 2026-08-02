@@ -62,7 +62,7 @@ public class AuthApiTests(SqlServerFixture fixture) : IAsyncLifetime
         Assert.Contains(cookies, c => c.StartsWith("mp_access=", StringComparison.Ordinal)
                                       && c.Contains("httponly", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(cookies, c => c.StartsWith("mp_refresh=", StringComparison.Ordinal)
-                                      && c.Contains("path=/api/v1/auth/refresh", StringComparison.OrdinalIgnoreCase));
+                                      && c.Contains("path=/api/v1/auth", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(cookies, c => c.StartsWith("mp_csrf=", StringComparison.Ordinal)
                                       && !c.Contains("httponly", StringComparison.OrdinalIgnoreCase));
     }
@@ -182,6 +182,65 @@ public class AuthApiTests(SqlServerFixture fixture) : IAsyncLifetime
 
         var after = await client.GetAsync("/api/v1/auth/me");
         Assert.Equal(HttpStatusCode.Unauthorized, after.StatusCode);
+    }
+
+    /// <summary>
+    /// The control for the test below. A captured refresh token replayed from a client with
+    /// an empty cookie jar must genuinely reach the server and mint a session — otherwise
+    /// the revocation test could pass for the wrong reason, because a refresh request that
+    /// carried no cookie at all would also fail.
+    /// </summary>
+    [Fact]
+    public async Task A_captured_refresh_token_works_from_a_clean_client()
+    {
+        var registered = await _factory.CreateClient().PostAsJsonAsync("/api/v1/auth/register",
+            new { Email = AuthenticatedClient.NewEmail(), Password = AuthenticatedClient.ValidPassword });
+        registered.EnsureSuccessStatusCode();
+
+        var captured = AuthenticatedClient.ReadCookie(registered, "mp_refresh");
+        Assert.False(string.IsNullOrEmpty(captured));
+
+        var replay = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
+        replay.Headers.Add("Cookie", $"mp_refresh={captured}");
+
+        var response = await _factory.CreateClient().SendAsync(replay);
+
+        Assert.True(response.IsSuccessStatusCode,
+            "A hand-attached Cookie header must reach the refresh endpoint.");
+    }
+
+    /// <summary>
+    /// Logout has to revoke server-side, not just clear the caller's cookies. Asserting the
+    /// caller's own jar was emptied is exactly what made the original defect look fixed: the
+    /// refresh cookie was path-scoped to /api/v1/auth/refresh, never rode the logout request,
+    /// and LogoutHandler's null guard meant RevokeAllForUserAsync was unreachable — so a
+    /// token captured beforehand stayed valid for its full 14 days.
+    /// </summary>
+    [Fact]
+    public async Task Logging_out_revokes_a_refresh_token_captured_beforehand()
+    {
+        var client = _factory.CreateClient();
+
+        var registered = await client.PostAsJsonAsync("/api/v1/auth/register",
+            new { Email = AuthenticatedClient.NewEmail(), Password = AuthenticatedClient.ValidPassword });
+        registered.EnsureSuccessStatusCode();
+
+        var captured = AuthenticatedClient.ReadCookie(registered, "mp_refresh");
+        Assert.False(string.IsNullOrEmpty(captured));
+
+        var logout = await client.PostAsync("/api/v1/auth/logout", content: null);
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+
+        // A clean client carrying nothing but the captured token — no access cookie, and
+        // nothing inherited from the jar that logout just cleared.
+        var replay = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
+        replay.Headers.Add("Cookie", $"mp_refresh={captured}");
+
+        var response = await _factory.CreateClient().SendAsync(replay);
+
+        Assert.False(response.IsSuccessStatusCode,
+            "A refresh token captured before logout must not still mint a session.");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]

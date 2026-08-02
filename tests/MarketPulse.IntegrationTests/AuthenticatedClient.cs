@@ -59,6 +59,25 @@ public static class AuthenticatedClient
     }
 
     /// <summary>
+    /// Pulls a raw cookie value straight out of a response's Set-Cookie headers, for tests
+    /// that need to hold on to a token independently of any client's cookie jar.
+    /// </summary>
+    public static string? ReadCookie(HttpResponseMessage response, string name)
+    {
+        if (!response.Headers.TryGetValues("Set-Cookie", out var cookies))
+        {
+            return null;
+        }
+
+        var prefix = $"{name}=";
+
+        return cookies
+            .Select(c => c.Split(';')[0])
+            .FirstOrDefault(c => c.StartsWith(prefix, StringComparison.Ordinal))
+            ?[prefix.Length..];
+    }
+
+    /// <summary>
     /// Reads the mp_csrf value out of the Set-Cookie headers and sets it as the
     /// X-CSRF-Token header — exactly what the browser client does in JavaScript.
     /// </summary>
