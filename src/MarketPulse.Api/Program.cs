@@ -10,7 +10,9 @@ using MarketPulse.Application.Abstractions;
 using MarketPulse.Application.Configuration;
 using MarketPulse.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,9 +34,6 @@ builder.Services.AddOptions<AuthOptions>()
 
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? throw new InvalidOperationException("The Jwt configuration section is missing.");
-
-var auth = builder.Configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>()
-    ?? new AuthOptions();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -71,6 +70,35 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 }
 
                 return Task.CompletedTask;
+            },
+
+            OnChallenge = async context =>
+            {
+                // Suppress the default empty-bodied 401 so the response matches the
+                // ProblemDetails contract every other error in this API follows.
+                context.HandleResponse();
+
+                if (context.Response.HasStarted)
+                {
+                    return;
+                }
+
+                var correlationId =
+                    context.HttpContext.Items[CorrelationIdMiddleware.HeaderName]?.ToString()
+                    ?? "unknown";
+
+                var problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status401Unauthorized,
+                    Title = "unauthenticated",
+                    Type = "https://marketpulse.local/errors/unauthenticated",
+                    Detail = "Authentication is required."
+                };
+                problem.Extensions["correlationId"] = correlationId;
+
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(
+                    problem, options: null, contentType: "application/problem+json");
             }
         };
     });
@@ -81,14 +109,25 @@ builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = auth.LoginRequestsPerMinute,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0
-        }));
+    // Read AuthOptions from DI per request rather than a value captured once at startup:
+    // integration tests override LoginRequestsPerMinute through WebApplicationFactory
+    // configuration, which lands after this file's top-level statements would have already
+    // run, so a snapshot taken there would never see the override.
+    options.AddPolicy("auth", context =>
+    {
+        var currentLimit = context.RequestServices
+            .GetRequiredService<IOptionsMonitor<AuthOptions>>()
+            .CurrentValue.LoginRequestsPerMinute;
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = currentLimit,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
 });
 
 builder.Services.AddControllers();
@@ -115,6 +154,7 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors();
 app.UseRateLimiter();
+app.UseMiddleware<CsrfMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 

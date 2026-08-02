@@ -33,6 +33,21 @@ public class AuthCookiesTests
         Assert.True(options.HttpOnly);
     }
 
+    /// <summary>
+    /// The mp_csrf cookie must be JS-readable (httpOnly: false) but is still built through
+    /// this one factory rather than a hand-rolled CookieOptions, so it keeps every other
+    /// security attribute — Secure in particular, which had no test before this.
+    /// </summary>
+    [Fact]
+    public void A_non_http_only_cookie_is_still_secure_outside_development()
+    {
+        var options = AuthCookies.Build(
+            isDevelopment: false, SameSiteMode.Lax, Expires, path: null, httpOnly: false);
+
+        Assert.False(options.HttpOnly);
+        Assert.True(options.Secure);
+    }
+
     [Fact]
     public void The_path_is_applied_when_supplied()
     {

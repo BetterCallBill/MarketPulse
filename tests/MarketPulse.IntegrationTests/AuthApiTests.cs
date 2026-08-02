@@ -116,6 +116,9 @@ public class AuthApiTests(SqlServerFixture fixture) : IAsyncLifetime
         var response = await client.GetAsync("/api/v1/auth/me");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        Assert.Equal("unauthenticated", body!["title"].ToString());
     }
 
     [Fact]
@@ -198,10 +201,15 @@ public class AuthApiTests(SqlServerFixture fixture) : IAsyncLifetime
         registered.EnsureSuccessStatusCode();
 
         var captured = AuthenticatedClient.ReadCookie(registered, "mp_refresh");
+        var csrf = AuthenticatedClient.ReadCookie(registered, "mp_csrf");
         Assert.False(string.IsNullOrEmpty(captured));
 
+        // Refresh is a mutation like any other, so the replayed request also has to carry
+        // the matching CSRF cookie/header pair — the captured mp_refresh cookie alone is not
+        // enough, by design.
         var replay = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
-        replay.Headers.Add("Cookie", $"mp_refresh={captured}");
+        replay.Headers.Add("Cookie", $"mp_refresh={captured}; mp_csrf={csrf}");
+        replay.Headers.Add("X-CSRF-Token", Uri.UnescapeDataString(csrf!));
 
         var response = await _factory.CreateClient().SendAsync(replay);
 
@@ -226,15 +234,22 @@ public class AuthApiTests(SqlServerFixture fixture) : IAsyncLifetime
         registered.EnsureSuccessStatusCode();
 
         var captured = AuthenticatedClient.ReadCookie(registered, "mp_refresh");
+        var csrf = AuthenticatedClient.ReadCookie(registered, "mp_csrf");
         Assert.False(string.IsNullOrEmpty(captured));
 
+        // client's cookie jar already holds mp_csrf from registration; logout is a mutation,
+        // so it also needs the matching header attached.
+        AuthenticatedClient.AttachCsrfHeader(client, registered);
         var logout = await client.PostAsync("/api/v1/auth/logout", content: null);
         Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
 
         // A clean client carrying nothing but the captured token — no access cookie, and
-        // nothing inherited from the jar that logout just cleared.
+        // nothing inherited from the jar that logout just cleared. The CSRF pair is the
+        // same one captured at registration: CSRF validation is a stateless cookie/header
+        // compare, unrelated to whether the session it accompanies has since been revoked.
         var replay = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
-        replay.Headers.Add("Cookie", $"mp_refresh={captured}");
+        replay.Headers.Add("Cookie", $"mp_refresh={captured}; mp_csrf={csrf}");
+        replay.Headers.Add("X-CSRF-Token", Uri.UnescapeDataString(csrf!));
 
         var response = await _factory.CreateClient().SendAsync(replay);
 

@@ -41,6 +41,7 @@ public sealed class AuthController(
 
     [HttpPost("refresh")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     public async Task<ActionResult<SessionResponse>> Refresh(CancellationToken ct)
     {
         var token = Request.Cookies[AuthCookies.Refresh] ?? string.Empty;
@@ -66,7 +67,7 @@ public sealed class AuthController(
 
         return Guid.TryParse(id, out var userId)
             ? Ok(new SessionResponse(userId, email))
-            : Unauthorized();
+            : throw new UnauthorizedAccessException();
     }
 
     private ActionResult<SessionResponse> IssueSession(AuthResult result)
@@ -87,14 +88,8 @@ public sealed class AuthController(
         // refresh lifetime instead, and is readable by JavaScript by design — that is what
         // "double submit" means.
         var csrf = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        Response.Cookies.Append(AuthCookies.Csrf, csrf, new CookieOptions
-        {
-            HttpOnly = false,
-            Secure = !isDev,
-            SameSite = SameSiteMode.Lax,
-            Expires = result.RefreshExpiresUtc,
-            Path = "/"
-        });
+        Response.Cookies.Append(AuthCookies.Csrf, csrf,
+            AuthCookies.Build(isDev, SameSiteMode.Lax, result.RefreshExpiresUtc, path: null, httpOnly: false));
 
         return Ok(new SessionResponse(result.UserId, result.Email));
     }
@@ -108,13 +103,7 @@ public sealed class AuthController(
             AuthCookies.Build(isDev, SameSiteMode.Lax, expired, path: null));
         Response.Cookies.Append(AuthCookies.Refresh, string.Empty,
             AuthCookies.Build(isDev, SameSiteMode.Strict, expired, AuthCookies.RefreshPath));
-        Response.Cookies.Append(AuthCookies.Csrf, string.Empty, new CookieOptions
-        {
-            HttpOnly = false,
-            Secure = !isDev,
-            SameSite = SameSiteMode.Lax,
-            Expires = expired,
-            Path = "/"
-        });
+        Response.Cookies.Append(AuthCookies.Csrf, string.Empty,
+            AuthCookies.Build(isDev, SameSiteMode.Lax, expired, path: null, httpOnly: false));
     }
 }

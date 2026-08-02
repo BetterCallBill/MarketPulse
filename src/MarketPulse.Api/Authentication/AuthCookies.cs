@@ -23,9 +23,10 @@ public static class AuthCookies
         bool isDevelopment,
         SameSiteMode sameSite,
         DateTimeOffset expires,
-        string? path) => new()
+        string? path,
+        bool httpOnly = true) => new()
     {
-        HttpOnly = true,
+        HttpOnly = httpOnly,
 
         // Secure is off in Development on purpose: localhost is served over plain HTTP,
         // and .NET's CookieContainer will not send a Secure cookie over HTTP, which would
