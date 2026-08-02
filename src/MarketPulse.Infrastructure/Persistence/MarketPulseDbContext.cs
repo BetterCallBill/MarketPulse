@@ -9,6 +9,7 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
     public DbSet<User> Users => Set<User>();
     public DbSet<Ticker> Tickers => Set<Ticker>();
     public DbSet<Watchlist> Watchlists => Set<Watchlist>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -17,11 +18,31 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
             e.HasKey(x => x.Id);
             e.Property(x => x.Email).HasMaxLength(256).IsRequired();
             e.HasIndex(x => x.Email).IsUnique();
+            e.Property(x => x.PasswordHash).HasMaxLength(256).IsRequired();
+            e.Property(x => x.CreatedUtc).IsRequired();
+            e.Property(x => x.FailedLoginCount).IsRequired();
+            e.Property(x => x.LockoutEndUtc);
             e.HasData(new User(
                 SeedData.DevUserId,
                 SeedData.DevUserEmail,
                 SeedData.DevUserPasswordHash,
                 SeedData.DevUserCreatedUtc));
+        });
+
+        b.Entity<RefreshToken>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
+
+            // Every refresh looks a token up by hash — without this index that is a
+            // table scan on the hottest authenticated path in the app.
+            e.HasIndex(x => x.TokenHash).IsUnique();
+
+            // Reuse detection revokes the whole family, which queries by user.
+            e.HasIndex(x => x.UserId);
+
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<Ticker>(e =>
