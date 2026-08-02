@@ -37,7 +37,9 @@ public class WatchlistApiTests(SqlServerFixture fixture) : IAsyncLifetime
         await using var db = fixture.CreateContext();
         if (!await db.Users.AnyAsync(u => u.Id == SeedData.DevUserId))
         {
-            db.Users.Add(new User(SeedData.DevUserId, SeedData.DevUserEmail));
+            db.Users.Add(new User(
+                SeedData.DevUserId, SeedData.DevUserEmail,
+                SeedData.DevUserPasswordHash, SeedData.DevUserCreatedUtc));
             await db.SaveChangesAsync();
         }
 

@@ -22,7 +22,7 @@ public class WatchlistPersistenceTests(SqlServerFixture fixture)
 
         await using (var write = fixture.CreateContext())
         {
-            write.Users.Add(new User(userId, $"{userId}@test.local"));
+            write.Users.Add(new User(userId, $"{userId}@test.local", "hash", DateTimeOffset.UtcNow));
             var watchlist = Watchlist.Create(userId);
             watchlist.AddItem("IVV");
             watchlist.AddItem("NDQ");
@@ -44,7 +44,7 @@ public class WatchlistPersistenceTests(SqlServerFixture fixture)
 
         await using (var writeDb = fixture.CreateContext())
         {
-            writeDb.Users.Add(new User(userId, $"{userId}@test.local"));
+            writeDb.Users.Add(new User(userId, $"{userId}@test.local", "hash", DateTimeOffset.UtcNow));
 
             var writeRepo = new WatchlistRepository(writeDb);
             var watchlist = Watchlist.Create(userId);
