@@ -4,6 +4,12 @@ public abstract class DomainException(string message) : Exception(message)
 {
     /// <summary>Stable slug used to build the ProblemDetails `type` URI.</summary>
     public abstract string ErrorCode { get; }
+
+    /// <summary>
+    /// HTTP status this failure maps to. Watchlist rule violations are conflicts, so 409
+    /// is the default; the authentication exceptions override it.
+    /// </summary>
+    public virtual int StatusCode => 409;
 }
 
 public sealed class DuplicateTickerException(string ticker)
