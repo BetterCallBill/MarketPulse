@@ -6,6 +6,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.IdentityModel.Tokens;
 
 namespace MarketPulse.Api.Controllers;
 
@@ -87,7 +88,14 @@ public sealed class AuthController(
         // expired would have no way to authenticate its own refresh call. It tracks the
         // refresh lifetime instead, and is readable by JavaScript by design — that is what
         // "double submit" means.
-        var csrf = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        //
+        // base64url rather than standard base64: standard base64's `+`, `/`, and `=` get
+        // percent-encoded by Set-Cookie, so a frontend reading the cookie straight off
+        // document.cookie and echoing it back verbatim as the header would never match what
+        // CsrfMiddleware reads from Request.Cookies (which decodes on the way in). base64url
+        // has no characters that need encoding, so the cookie and header values are always
+        // byte-for-byte identical — no decode step required on either side.
+        var csrf = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
         Response.Cookies.Append(AuthCookies.Csrf, csrf,
             AuthCookies.Build(isDev, SameSiteMode.Lax, result.RefreshExpiresUtc, path: null, httpOnly: false));
 

@@ -57,7 +57,7 @@ public class CsrfAndRateLimitTests(SqlServerFixture fixture)
     }
 
     [Fact]
-    public async Task A_mutation_with_a_mismatched_csrf_header_is_rejected_with_403()
+    public async Task A_mutation_with_a_short_mismatched_csrf_header_is_rejected_with_403()
     {
         using var factory = CreateFactory();
         var client = await AuthenticatedClient.RegisterAsync(factory);
@@ -69,6 +69,34 @@ public class CsrfAndRateLimitTests(SqlServerFixture fixture)
             "/api/v1/watchlist/items", new AddWatchlistItemCommand("IVV"));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        Assert.Equal("csrf-failed", body!["title"].ToString());
+    }
+
+    /// <summary>
+    /// A header the same length as the real nonce, differing only in its first character.
+    /// <c>CryptographicOperations.FixedTimeEquals</c> short-circuits on a length mismatch, so
+    /// the short-token case above never touches the actual constant-time byte comparison —
+    /// this is the one that does.
+    /// </summary>
+    [Fact]
+    public async Task A_mutation_with_a_same_length_mismatched_csrf_header_is_rejected_with_403()
+    {
+        using var factory = CreateFactory();
+        var client = await AuthenticatedClient.RegisterAsync(factory);
+
+        var real = client.DefaultRequestHeaders.GetValues("X-CSRF-Token").Single();
+        var tampered = (real[0] == 'A' ? 'B' : 'A') + real[1..];
+
+        client.DefaultRequestHeaders.Remove("X-CSRF-Token");
+        client.DefaultRequestHeaders.Add("X-CSRF-Token", tampered);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/watchlist/items", new AddWatchlistItemCommand("IVV"));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        Assert.Equal("csrf-failed", body!["title"].ToString());
     }
 
     [Fact]
