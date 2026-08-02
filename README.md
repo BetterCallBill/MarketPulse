@@ -1,8 +1,8 @@
 # MarketPulse Pro 📈
 
-**A full-stack, real-time ASX ETF portfolio & alerts platform — engineered as a senior full-stack (.NET + React) showcase**
+**A full-stack, real-time ASX ETF portfolio & alerts platform — built to help everyday investors follow their money**
 
-> Users register, build watchlists and mock portfolios, receive real-time prices over WebSocket, and set price alerts that are evaluated server-side and delivered through a message queue. One sentence to describe — fifteen interview categories deep.
+> Users register, build watchlists and mock portfolios, receive real-time prices over WebSocket, and set price alerts that are evaluated server-side and delivered through a message queue. Everything an investor needs to keep an eye on a portfolio without watching a screen all day.
 
 [![CI](https://img.shields.io/badge/CI-GitHub_Actions-blue)]() [![Backend](https://img.shields.io/badge/.NET-10.0-512BD4)]() [![Frontend](https://img.shields.io/badge/React-18-61DAFB)]() [![IaC](https://img.shields.io/badge/Terraform-AWS-844FBA)]() [![License](https://img.shields.io/badge/license-MIT-green)]()
 
@@ -17,7 +17,7 @@
 - [Architecture](#architecture)
 - [Tech stack](#tech-stack)
 - [Feature overview](#feature-overview)
-- [Interview concept coverage map](#interview-concept-coverage-map)
+- [Engineering coverage map](#engineering-coverage-map)
 - [Repository structure](#repository-structure)
 - [Getting started](#getting-started)
 - [Delivery plan](#delivery-plan)
@@ -28,7 +28,9 @@
 
 ## Why this project exists
 
-MarketPulse Pro is deliberately scoped so that **every major mid-to-senior full-stack interview category maps to a real, shipped feature** — not a toy demo. The product domain (ASX ETFs: IVV, NDQ, VHY, FANG) reflects genuine personal investing experience, making every technical decision explainable with authentic context.
+Most retail investors track their holdings in a spreadsheet that is stale the moment they close it, and find out a price moved only after it has already moved. MarketPulse Pro exists to close that gap: **a live view of what you hold, and a server-side alert that reaches you whether or not the app is open**.
+
+The product domain (ASX ETFs: IVV, NDQ, VHY, FANG) comes from genuine personal investing experience, so the features are the ones an investor actually reaches for — not a toy demo. Every engineering decision here is in service of that: prices are useless if they're late, alerts are worse than nothing if they're missed or duplicated, and a portfolio people trust cannot lose a transaction.
 
 **Design principles:**
 
@@ -74,7 +76,7 @@ MarketPulse Pro is deliberately scoped so that **every major mid-to-senior full-
      └────────────────┘          └─────────────────────────┘
 ```
 
-**The core architectural decision:** a **modular monolith (Portfolio + Market Data) plus one extracted Alerts microservice**. This single choice generates the strongest senior talking point — the trade-offs of *both* approaches, defended from lived experience, documented in [ADR-001](docs/adr/001-modular-monolith-plus-one-service.md).
+**The core architectural decision:** a **modular monolith (Portfolio + Market Data) plus one extracted Alerts microservice**. Alert evaluation is the one workload whose load is driven by how many thresholds users set rather than by how many people are looking at the app, so it scales independently; everything else stays in one deployable. Trade-offs of both approaches are documented in [ADR-001](docs/adr/001-modular-monolith-plus-one-service.md).
 
 ---
 
@@ -147,7 +149,7 @@ packages/emitter        # Standalone ES module event emitter
 
 ---
 
-## Interview concept coverage map
+## Engineering coverage map
 
 ### Tier 1 — Language & runtime fundamentals
 
@@ -235,7 +237,7 @@ packages/emitter        # Standalone ES module event emitter
 
 **Where:** frontend + BFF configuration + `docs/PERFORMANCE.md`
 
-- **Cookies vs storage — implemented, not recited:** httpOnly + SameSite session cookies; `localStorage` for UI preferences only
+- **Cookies vs storage:** httpOnly + SameSite session cookies keep session tokens out of reach of injected scripts; `localStorage` holds UI preferences only
 - **CORS:** configured on the API with a written explanation of preflight behaviour
 - **Caching:** immutable hashed assets; `stale-while-revalidate` for chart history
 - **Core Web Vitals:** RUM snippet reports LCP / INP / CLS from production
@@ -256,7 +258,7 @@ packages/emitter        # Standalone ES module event emitter
 
 **Where:** `MarketPulse.Alerts/` worker + RabbitMQ topology
 
-- **Monolith vs microservices:** the architecture *is* the answer — one service extracted for a documented reason (independent scaling of alert evaluation)
+- **Monolith vs microservices:** one service extracted for a documented reason (independent scaling of alert evaluation), everything else kept in a single deployable
 - **RabbitMQ:** topic exchange for price events; dead-letter queue for poison messages
 - **Outbox pattern:** domain events persisted transactionally, relayed by a background dispatcher
 - **Idempotent consumers:** dedupe on message ID; redelivery-safe by design
@@ -303,7 +305,7 @@ packages/emitter        # Standalone ES module event emitter
 - **CI/CD discipline:** every feature lands via a self-PR with description, screenshots, and a review checklist; conventional commits throughout
 - **Code review:** PR templates enforce "what/why/how tested"; the history reads like a well-run team's
 - **Documentation as communication:** ADR folder, architecture-first README, style guides — written cross-team communication demonstrated
-- **STAR-story generator — six interview-ready stories with real metrics:**
+- **Six engineering write-ups with real metrics:**
   1. The N+1 hunt (data access + measurement)
   2. The captive-dependency bug (DI depth)
   3. The queue-outage chaos test → *"tell me about a production issue"*
@@ -410,16 +412,16 @@ pnpm --filter e2e playwright test            # E2E journeys
 
 ## Delivery plan
 
-| Phase | Weeks | Deliverable | Categories exercised |
+| Phase | Weeks | Deliverable | Areas exercised |
 |---|---|---|---|
 | 1 · Backend foundation | 1–2 | Clean Architecture skeleton, auth, Portfolio CRUD, EF Core + migrations | 1, 4, 7, 8, 13 |
 | 2 · Real-time core | 3–4 | Price ingestion service, SignalR fan-out, Dapper history queries | 1, 4, 8, 11 |
-| 3 · Messaging & alerts | 5–6 | RabbitMQ, outbox, Alerts microservice, chaos test — **interview-ready backend** | 10, 11, 14 |
+| 3 · Messaging & alerts | 5–6 | RabbitMQ, outbox, Alerts microservice, chaos test — **alerts that survive an outage** | 10, 11, 14 |
 | 4 · Frontend core | 7–8 | Dashboard, price grid, watchlist, state architecture, design system | 2, 3, 5, 6 |
 | 5 · Cloud & pipeline | 9–10 | Terraform, ECS blue-green, Lambda snapshot, observability | 12, 15 |
 | 6 · Hardening | 11–12 | Full test suite, CSP, threat model, performance pass, RUM, docs | 9, 13, 14, 15 |
 
-> **Pragmatic path:** backend first (weeks 1–6, the primary interview target) — interviews can start from week 6 with the backend alone.
+> **Pragmatic path:** backend first (weeks 1–6) — prices, portfolios, and alerts are what make the product useful, so the engine is trustworthy before the dashboard gets polished.
 
 ---
 
@@ -433,7 +435,7 @@ pnpm --filter e2e playwright test            # E2E journeys
 - [ ] Chaos test: RabbitMQ outage recovers with zero lost alerts
 - [ ] p95 API latency < 200ms under ingestion load (documented load test)
 - [ ] Every significant decision has an ADR with rejected alternatives
-- [ ] Six interview-ready STAR stories extracted with real metrics
+- [ ] Six engineering write-ups documented with real metrics
 - [ ] Infra reproducible from scratch with `terraform apply`
 
 ---
@@ -453,4 +455,4 @@ pnpm --filter e2e playwright test            # E2E journeys
 
 ---
 
-*Built to be talked about — every feature answers an interview question, and every incident became a story.*
+*Built for people who invest their own money — every feature answers a question an investor actually asks, and every incident made the platform more dependable.*
