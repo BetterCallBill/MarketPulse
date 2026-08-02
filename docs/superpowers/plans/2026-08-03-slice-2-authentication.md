@@ -17,7 +17,7 @@
 - **`TreatWarningsAsErrors` is true** for every .NET project (`Directory.Build.props`). A warning fails the build. Notably: `xUnit1031` (blocking `.Result`/`.Wait()`) and `CS8618` (non-nullable uninitialised) are build errors.
 - **Central Package Management is on.** Never put a `Version=` on a `PackageReference`. `dotnet add package` writes the version into `Directory.Packages.props`. Never write a wildcard (`12.*`) — CPM rejects it. After every `dotnet add package`, confirm `Directory.Packages.props` still ends with a trailing newline; `dotnet add package` has stripped it twice before.
 - **Dependency rule, enforced by `tests/MarketPulse.UnitTests/Architecture/DependencyRuleTests.cs`:** `Domain` references nothing; `Application` references `Domain`; `Infrastructure` references `Application`; `Api` references `Infrastructure`. **No Identity, EF Core, or ASP.NET type may appear in `Domain` or `Application`.**
-- **Nothing below the API layer changes.** `IWatchlistRepository`, `WatchlistRepository`, `GetWatchlistQuery`, `AddWatchlistItemCommand`, `RemoveWatchlistItemCommand`, and the watchlist EF mapping are not to be edited. The only permitted edit to `WatchlistController` is adding `[Authorize]`.
+- **The watchlist feature does not change.** These files are not to be edited: `IWatchlistRepository`, `WatchlistRepository`, `GetWatchlistQuery`, `AddWatchlistItemCommand`, `RemoveWatchlistItemCommand`, `Watchlist.cs`, `WatchlistItem.cs`, and the `Watchlist`/`WatchlistItem` mapping blocks in `MarketPulseDbContext`. The only permitted edit to `WatchlistController` is adding `[Authorize]`. (Adding *new* files below the API layer — the auth entities, handlers and repositories — is the substance of Tasks 1–5 and is expected; the constraint is about not disturbing slice 1's watchlist path.)
 - **Token lifetimes:** access 15 minutes, refresh 14 days. **Lockout:** 5 consecutive failures → 15 minutes. **Rate limit:** 10 requests/minute per IP on login and register. All are configuration-bound so tests can override them.
 - **Cookie names:** `mp_access`, `mp_refresh`, `mp_csrf`. Refresh cookie path is `/api/v1/auth/refresh`. `Secure` is set only outside Development — .NET's `CookieContainer` refuses to send `Secure` cookies over plain HTTP, which would break every integration test.
 - **Dev seed credentials:** `dev@marketpulse.local` / `DevPassw0rd!2026`. The password hash is a literal constant in `SeedData` because `PasswordHasher<T>` salts randomly and `HasData` requires determinism.
@@ -2456,7 +2456,6 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors();
 app.UseRateLimiter();
-app.UseMiddleware<CsrfMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -2469,7 +2468,7 @@ app.Run();
 public partial class Program;
 ```
 
-`CsrfMiddleware` does not exist yet — Task 7 writes it. To keep this task's build green, **comment out the `app.UseMiddleware<CsrfMiddleware>();` line** and leave a `// Task 7` note; Task 7 uncomments it.
+CSRF is not wired here — `CsrfMiddleware` does not exist until Task 7, which inserts its registration between `UseRateLimiter()` and `UseAuthentication()`. Do not leave a commented-out placeholder for it.
 
 - [ ] **Step 11: Add the configuration**
 
@@ -3175,7 +3174,7 @@ public sealed class CsrfMiddleware(RequestDelegate next)
 
 - [ ] **Step 4: Register it**
 
-In `src/MarketPulse.Api/Program.cs`, uncomment the line added in Task 6 Step 10 so the pipeline reads:
+In `src/MarketPulse.Api/Program.cs`, insert `app.UseMiddleware<CsrfMiddleware>();` between `app.UseRateLimiter();` and `app.UseAuthentication();`, so the pipeline reads:
 
 ```csharp
 app.UseMiddleware<CorrelationIdMiddleware>();
@@ -4580,7 +4579,7 @@ Checked after writing, against the spec.
 
 **Two spec items deliberately spread rather than given their own task.** Account enumeration is documented in Task 12's ADR and enforced by the two `AuthApiTests` that assert unknown-email and wrong-password return identical responses. The `UnauthorizedAccessException` → 401 fix from the slice 1 ledger is folded into Task 6 Step 7, where the middleware is already open.
 
-**Known sequencing hazard.** Task 6 Step 10 registers `CsrfMiddleware`, which Task 7 creates. The step says to comment the line out and Task 7 Step 4 uncomments it. An executor running tasks out of order will hit a compile error with an obvious cause.
+**Known sequencing note.** `CsrfMiddleware` is created and registered together in Task 7; Task 6's pipeline deliberately omits it rather than leaving a commented-out placeholder. Tasks 6 and 7 must therefore run in order, which the plan already requires.
 
 **Type consistency.** `AuthResult` is constructed in `SessionFactory.IssueAsync` and in `RefreshSessionHandler` — both pass the same six positional arguments in the same order. `AuthCookies.Build` has one signature, used in three places. The api-client's `request` takes a path, not a URL, in every call site.
 
