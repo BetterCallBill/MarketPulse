@@ -189,11 +189,21 @@ NIST SP 800-63B: 12 character minimum, no composition rules, no forced rotation,
 blocklist check. Deliberately the opposite of the "one uppercase, one number, one symbol"
 reflex.
 
-The blocklist is an **embedded list of roughly the thousand most common passwords**,
-compiled into the Application assembly. The alternative — querying the Have I Been Pwned
-range API — is the stronger check, but it puts an outbound network call on the registration
-path and a third-party availability dependency in the middle of a test suite. Recorded as
-a candidate for the hardening slice.
+The blocklist is the **SecLists 10,000-most-common-passwords corpus**, embedded in the
+Application assembly. The alternative — querying the Have I Been Pwned range API — is the
+stronger check, but it puts an outbound network call on the registration path and a
+third-party availability dependency in the middle of a test suite. Recorded as a candidate
+for the hardening slice.
+
+**Measured limitation, stated rather than glossed** (found during implementation on
+2026-08-03; the original text here specified "roughly the thousand most common passwords"):
+only 10 of those 10,000 entries are 12 characters or longer, and none of the top 1,000 are.
+Against a 12-character minimum the length rule alone rejects 9,990 of them before the
+blocklist is ever consulted, so the blocklist is very nearly inert as configured. It is
+kept because it is genuine breach data at no runtime cost, and it becomes load-bearing the
+moment the minimum drops — but the honest summary is that **length is the control doing the
+work here**, and only a full-corpus check like HIBP would meaningfully catch long breached
+passwords.
 
 ### Accepted limitation: account enumeration
 

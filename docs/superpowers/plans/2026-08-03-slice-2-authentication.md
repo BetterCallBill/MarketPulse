@@ -622,19 +622,31 @@ public class PasswordPolicyTests
     }
 
     [Theory]
-    [InlineData("password1234")]
-    [InlineData("PASSWORD1234")]
+    [InlineData("unbelievable")]
+    [InlineData("UNBELIEVABLE")]
     public void Blocklisted_passwords_are_rejected_case_insensitively(string password)
     {
+        // One of only ten entries in the corpus long enough to reach the blocklist at all.
         Assert.False(PasswordPolicy.IsAcceptable(password));
     }
 
     [Fact]
     public void The_blocklist_actually_loaded()
     {
-        Assert.True(PasswordPolicy.BlocklistSize > 100,
+        Assert.True(PasswordPolicy.BlocklistSize > 5000,
             $"Blocklist only has {PasswordPolicy.BlocklistSize} entries — the embedded " +
             "resource probably did not load.");
+    }
+
+    [Fact]
+    public void A_short_blocklisted_password_is_rejected_on_length_before_the_blocklist_matters()
+    {
+        // Documents a real limitation: of the 10,000 most common passwords, only 10 are
+        // long enough to reach the blocklist at all. The 12-character minimum is doing
+        // nearly all the work here — the blocklist earns its place only if that floor
+        // ever drops. See the slice 2 spec's password-policy section.
+        Assert.False(PasswordPolicy.IsAcceptable("password"));
+        Assert.True("password".Length < PasswordPolicy.MinimumLength);
     }
 }
 ```
@@ -648,34 +660,15 @@ Expected: build failure — `PasswordPolicy` does not exist.
 
 ```bash
 curl -fsSL -o src/MarketPulse.Application/Authentication/CommonPasswords.txt \
-  https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/10-million-password-list-top-1000.txt
+  https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/10k-most-common.txt
 wc -l < src/MarketPulse.Application/Authentication/CommonPasswords.txt
 ```
 
-Expected: `1000`.
+Expected: `10000`.
 
-**If the download fails (no network, URL moved):** create the file by hand with at least the following entries, one per line, and record the deviation in the task report. `password1234` and `passw0rd1234` must be present either way — the tests above depend on them.
+**Do not hand-write a substitute if this fails.** Invented entries are not breach data and give a false impression of the control's strength. If the URL is dead, try the sibling files in the same SecLists directory (`500-worst-passwords.txt`, `Pwdb_top-100000.txt`) and record which one you used.
 
-```
-password
-password1
-password123
-password1234
-passw0rd1234
-qwerty123456
-123456789012
-letmein12345
-iloveyou1234
-administrator
-welcome12345
-monkey123456
-dragon123456
-football1234
-baseball1234
-sunshine1234
-princess1234
-trustno12345
-```
+**Known limitation, deliberately accepted — do not try to "fix" it:** only 10 of these 10,000 entries are ≥12 characters, and none of the top 1,000 are. At `MinimumLength = 12` the length check alone rejects 9,990 of them before the blocklist is consulted. The blocklist is therefore very nearly inert today. It is retained anyway because it is real breach data at no cost, and because it is already correct if the minimum ever drops. Task 12 documents this honestly rather than implying stronger protection than exists.
 
 - [ ] **Step 4: Embed the blocklist in the assembly**
 
