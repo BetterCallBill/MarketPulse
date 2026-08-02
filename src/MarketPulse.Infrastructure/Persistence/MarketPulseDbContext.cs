@@ -17,7 +17,11 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
             e.HasKey(x => x.Id);
             e.Property(x => x.Email).HasMaxLength(256).IsRequired();
             e.HasIndex(x => x.Email).IsUnique();
-            e.HasData(new User(SeedData.DevUserId, SeedData.DevUserEmail));
+            e.HasData(new User(
+                SeedData.DevUserId,
+                SeedData.DevUserEmail,
+                SeedData.DevUserPasswordHash,
+                SeedData.DevUserCreatedUtc));
         });
 
         b.Entity<Ticker>(e =>

@@ -7,6 +7,21 @@ public static class SeedData
     public static readonly Guid DevUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     public const string DevUserEmail = "dev@marketpulse.local";
 
+    /// <summary>
+    /// Development-only credentials, documented in the README so a clean clone can sign in.
+    /// Accepted showcase trade-off, recorded in the slice 2 spec: the hash must be a literal
+    /// because `PasswordHasher<T>` salts randomly and `HasData` requires determinism.
+    /// The hardening slice removes this account.
+    /// </summary>
+    public const string DevUserPassword = "DevPassw0rd!2026";
+
+    /// <summary>PBKDF2 hash of <see cref="DevUserPassword"/>. Regenerate only if that changes.</summary>
+    public const string DevUserPasswordHash = "AQAAAAIAAYagAAAAEIoGPGaPOO/1jvXR2HrOQV5cvQDBSIo1eWEg7F7xGnD2nlgaoh4kmq9+42csuJnjAw==";
+
+    /// <summary>Fixed creation timestamp — `HasData` must be deterministic across regenerations.</summary>
+    public static readonly DateTimeOffset DevUserCreatedUtc =
+        new(2026, 8, 3, 0, 0, 0, TimeSpan.Zero);
+
     /// <summary>Fixed id for the dev user's seeded watchlist. `HasData` requires a stable key.</summary>
     public static readonly Guid DevWatchlistId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
