@@ -113,15 +113,23 @@ POST /api/v1/auth/login
   └─ verify password hash → mint
       ├─ access JWT   15 min   → mp_access   httpOnly, SameSite=Lax,    Secure, Path=/
       ├─ refresh      14 days  → mp_refresh  httpOnly, SameSite=Strict, Secure,
-      │                                       Path=/api/v1/auth/refresh
+      │                                       Path=/api/v1/auth
       └─ csrf nonce            → mp_csrf     readable by JS (double-submit)
 ```
 
 Three deliberate details:
 
-**The refresh cookie is path-scoped** to `/api/v1/auth/refresh`, so it is not transmitted
-on any other request. Free, and it limits the blast radius of any single request being
-observed.
+**The refresh cookie is path-scoped** to `/api/v1/auth`, so it is not transmitted on
+watchlist, hub, or health requests. Free, and it limits the blast radius of any single
+request being observed.
+
+*Amended 2026-08-03, during implementation.* This was originally scoped to
+`/api/v1/auth/refresh` alone. That is narrower, and wrong: RFC 6265 path-matching then
+never sends the cookie to `/api/v1/auth/logout` either, so logout silently revoked nothing
+server-side and a token captured beforehand stayed valid for its full 14 days. Scoping to
+the `/api/v1/auth` prefix keeps the cookie off every non-auth request while letting logout
+actually revoke — and unlike putting `[Authorize]` on logout, it still works once the
+15-minute access token has expired.
 
 **Rotation with reuse detection.** Each refresh mints a new token and marks its predecessor
 revoked via `ReplacedByTokenId`. Presenting an *already-revoked* token means it leaked, so

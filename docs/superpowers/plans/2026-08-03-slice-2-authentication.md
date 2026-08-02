@@ -19,7 +19,7 @@
 - **Dependency rule, enforced by `tests/MarketPulse.UnitTests/Architecture/DependencyRuleTests.cs`:** `Domain` references nothing; `Application` references `Domain`; `Infrastructure` references `Application`; `Api` references `Infrastructure`. **No Identity, EF Core, or ASP.NET type may appear in `Domain` or `Application`.**
 - **The watchlist feature does not change.** These files are not to be edited: `IWatchlistRepository`, `WatchlistRepository`, `GetWatchlistQuery`, `AddWatchlistItemCommand`, `RemoveWatchlistItemCommand`, `Watchlist.cs`, `WatchlistItem.cs`, and the `Watchlist`/`WatchlistItem` mapping blocks in `MarketPulseDbContext`. The only permitted edit to `WatchlistController` is adding `[Authorize]`. (Adding *new* files below the API layer — the auth entities, handlers and repositories — is the substance of Tasks 1–5 and is expected; the constraint is about not disturbing slice 1's watchlist path.)
 - **Token lifetimes:** access 15 minutes, refresh 14 days. **Lockout:** 5 consecutive failures → 15 minutes. **Rate limit:** 10 requests/minute per IP on login and register. All are configuration-bound so tests can override them.
-- **Cookie names:** `mp_access`, `mp_refresh`, `mp_csrf`. Refresh cookie path is `/api/v1/auth/refresh`. `Secure` is set only outside Development — .NET's `CookieContainer` refuses to send `Secure` cookies over plain HTTP, which would break every integration test.
+- **Cookie names:** `mp_access`, `mp_refresh`, `mp_csrf`. Refresh cookie path is `/api/v1/auth` (the prefix, not the single endpoint — scoping it to `/refresh` alone stops logout from ever seeing it). `Secure` is set only outside Development — .NET's `CookieContainer` refuses to send `Secure` cookies over plain HTTP, which would break every integration test.
 - **Dev seed credentials:** `dev@marketpulse.local` / `DevPassw0rd!2026`. The password hash is a literal constant in `SeedData` because `PasswordHasher<T>` salts randomly and `HasData` requires determinism.
 
 ---
@@ -2078,7 +2078,7 @@ This is the atomic task. It deletes `DevAuthMiddleware`, turns on `[Authorize]`,
 - Consumes: `AuthResult` and the four commands (Task 5); `JwtOptions`, `AuthOptions` (Task 2).
 - Produces:
   - `AuthCookies.Access`/`.Refresh`/`.Csrf` — the three cookie names
-  - `AuthCookies.RefreshPath` = `"/api/v1/auth/refresh"`
+  - `AuthCookies.RefreshPath` = `"/api/v1/auth"`
   - `AuthCookies.Build(bool isDevelopment, SameSiteMode sameSite, DateTimeOffset expires, string? path) : CookieOptions`
   - `POST /api/v1/auth/{register,login,refresh,logout}`, `GET /api/v1/auth/me`, `GET /health`
   - `SessionResponse(Guid Id, string Email)` — the `/me` body
@@ -2138,14 +2138,14 @@ public class AuthCookiesTests
         var options = AuthCookies.Build(
             isDevelopment: true, SameSiteMode.Strict, Expires, AuthCookies.RefreshPath);
 
-        Assert.Equal("/api/v1/auth/refresh", options.Path);
+        Assert.Equal("/api/v1/auth", options.Path);
         Assert.Equal(SameSiteMode.Strict, options.SameSite);
     }
 
     [Fact]
     public void The_refresh_cookie_is_scoped_to_the_refresh_endpoint()
     {
-        Assert.Equal("/api/v1/auth/refresh", AuthCookies.RefreshPath);
+        Assert.Equal("/api/v1/auth", AuthCookies.RefreshPath);
     }
 }
 ```
@@ -2173,10 +2173,12 @@ public static class AuthCookies
     public const string Csrf = "mp_csrf";
 
     /// <summary>
-    /// The refresh cookie is scoped to the one endpoint that consumes it, so it is not
-    /// transmitted on any other request.
+    /// The refresh cookie is scoped to the auth route prefix, so it is not transmitted on
+    /// watchlist, hub, or health requests. Note this is the PREFIX, not `/refresh` alone:
+    /// scoping it to the single endpoint means logout never receives the cookie and so can
+    /// never revoke the token server-side.
     /// </summary>
-    public const string RefreshPath = "/api/v1/auth/refresh";
+    public const string RefreshPath = "/api/v1/auth";
 
     public static CookieOptions Build(
         bool isDevelopment,
@@ -2691,7 +2693,7 @@ public class AuthApiTests(SqlServerFixture fixture) : IAsyncLifetime
         Assert.Contains(cookies, c => c.StartsWith("mp_access=", StringComparison.Ordinal)
                                       && c.Contains("httponly", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(cookies, c => c.StartsWith("mp_refresh=", StringComparison.Ordinal)
-                                      && c.Contains("path=/api/v1/auth/refresh", StringComparison.OrdinalIgnoreCase));
+                                      && c.Contains("path=/api/v1/auth", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(cookies, c => c.StartsWith("mp_csrf=", StringComparison.Ordinal)
                                       && !c.Contains("httponly", StringComparison.OrdinalIgnoreCase));
     }
@@ -3228,6 +3230,73 @@ app.UseAuthorization();
 ```
 
 Order matters: `ExceptionHandlingMiddleware` must be above `CsrfMiddleware` to catch what it throws, and `UseCors` must be above it so a rejected preflight still gets its CORS headers.
+
+- [ ] **Step 4b: Close the three gaps the Task 6 review routed here**
+
+**(i) An anonymous 401 currently has an empty body.** Every other error in the app is `application/problem+json`, but a failed `[Authorize]` is a JwtBearer *challenge* — it writes the 401 and unwinds without throwing, so `ExceptionHandlingMiddleware` never sees it and `AddProblemDetails()` alone bodies nothing. A frontend error handler would need a special case for 401 alone. Fix it at the source, in the `AddJwtBearer` options in `Program.cs`, alongside the existing `OnMessageReceived`:
+
+```csharp
+            OnChallenge = async context =>
+            {
+                // Suppress the default empty-bodied 401 so the response matches the
+                // ProblemDetails contract every other error in this API follows.
+                context.HandleResponse();
+
+                if (context.Response.HasStarted)
+                {
+                    return;
+                }
+
+                var correlationId =
+                    context.HttpContext.Items[CorrelationIdMiddleware.HeaderName]?.ToString()
+                    ?? "unknown";
+
+                var problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status401Unauthorized,
+                    Title = "unauthenticated",
+                    Type = "https://marketpulse.local/errors/unauthenticated",
+                    Detail = "Authentication is required."
+                };
+                problem.Extensions["correlationId"] = correlationId;
+
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(
+                    problem, options: null, contentType: "application/problem+json");
+            }
+```
+
+This needs `using Microsoft.AspNetCore.Mvc;` in `Program.cs`. Also change `AuthController.Me()`'s bare `Unauthorized()` return to throw `new UnauthorizedAccessException()`, so it routes through `ExceptionHandlingMiddleware` and produces the same shape.
+
+**(ii) `AuthCookies.Build` hardcodes `HttpOnly = true`**, so `AuthController` hand-rolls a raw `CookieOptions` twice for `mp_csrf` — which makes `AuthCookies`'s own "the one place their security attributes are decided" comment untrue, and leaves the `mp_csrf` `Secure` flag as the only cookie attribute with no unit test. Add a parameter:
+
+```csharp
+    public static CookieOptions Build(
+        bool isDevelopment,
+        SameSiteMode sameSite,
+        DateTimeOffset expires,
+        string? path,
+        bool httpOnly = true) => new()
+    {
+        HttpOnly = httpOnly,
+        Secure = !isDevelopment,
+        SameSite = sameSite,
+        Expires = expires,
+        Path = path ?? "/"
+    };
+```
+
+Replace both raw `CookieOptions` blocks in `AuthController` with `AuthCookies.Build(isDev, SameSiteMode.Lax, expires, path: null, httpOnly: false)`. Add a unit test to `AuthCookiesTests` asserting that `httpOnly: false` still yields `Secure = true` outside Development — that is the attribute currently untested.
+
+**(iii) `/api/v1/auth/refresh` has no rate-limit policy.** It is `[AllowAnonymous]` and does a database lookup on every call. Add `[EnableRateLimiting("auth")]` to the `Refresh` action, matching `Login` and `Register`.
+
+Verify with `dotnet test` that the existing `AuthApiTests.Me_without_a_cookie_returns_401` still passes and that the 401 now carries a body — add an assertion to that test:
+
+```csharp
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        Assert.Equal("unauthenticated", body!["title"].ToString());
+```
 
 - [ ] **Step 5: Run the tests and confirm they pass**
 
