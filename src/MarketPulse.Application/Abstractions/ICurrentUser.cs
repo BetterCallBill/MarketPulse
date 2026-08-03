@@ -1,8 +1,9 @@
 namespace MarketPulse.Application.Abstractions;
 
 /// <summary>
-/// Resolves the caller's identity. Backed by DevAuthMiddleware in slice 1 and
-/// by JWT claims from slice 2 onward — no consumer changes when that swap happens.
+/// Resolves the caller's identity, read from the `sub` claim of the JWT the bearer
+/// handler validates. Slice 1 backed this with a development stub instead; no consumer
+/// changed when that was swapped for real authentication, which was the point of the seam.
 /// </summary>
 public interface ICurrentUser
 {
