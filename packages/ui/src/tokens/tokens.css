@@ -1,0 +1,74 @@
+/*
+ * Two layers, and one rule.
+ *
+ * PRIMITIVES hold raw values and carry no meaning. SEMANTIC tokens reference
+ * primitives and carry meaning. Components may use ONLY semantic tokens — that
+ * indirection is what makes a second theme a rewrite of this file rather than a
+ * hunt through every component. noPrimitiveLeak.test.ts enforces it.
+ */
+:root {
+  /* ---- Primitives: colour ---- */
+  --mp-grey-950: #0b0e13;
+  --mp-grey-900: #12161d;
+  --mp-grey-850: #1a1f28;
+  --mp-grey-700: #2a313d;
+  --mp-grey-400: #8b95a5;
+  --mp-grey-200: #c9d1dc;
+  --mp-grey-50: #f2f5f9;
+  --mp-green-400: #4ade80;
+  --mp-red-400: #f87171;
+  --mp-blue-400: #60a5fa;
+
+  /* ---- Primitives: space (4px scale) ---- */
+  --mp-space-1: 0.25rem;
+  --mp-space-2: 0.5rem;
+  --mp-space-3: 0.75rem;
+  --mp-space-4: 1rem;
+  --mp-space-5: 1.5rem;
+  --mp-space-6: 2rem;
+  --mp-space-8: 3rem;
+
+  /* ---- Primitives: shape and type ---- */
+  --mp-radius-sm: 4px;
+  --mp-radius-md: 8px;
+  --mp-font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mp-font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+
+  /* ---- Semantic: surfaces and text ---- */
+  --mp-surface-base: var(--mp-grey-950);
+  --mp-surface-raised: var(--mp-grey-900);
+  --mp-surface-hover: var(--mp-grey-850);
+  --mp-border-subtle: var(--mp-grey-700);
+  --mp-text-primary: var(--mp-grey-50);
+  --mp-text-secondary: var(--mp-grey-200);
+  --mp-text-muted: var(--mp-grey-400);
+
+  /* ---- Semantic: meaning ---- */
+  --mp-accent: var(--mp-blue-400);
+  --mp-danger: var(--mp-red-400);
+  --mp-focus-ring: var(--mp-blue-400);
+  --mp-price-up: var(--mp-green-400);
+  --mp-price-down: var(--mp-red-400);
+  --mp-price-neutral: var(--mp-text-primary);
+  --mp-opacity-stale: 0.45;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--mp-surface-base);
+  color: var(--mp-text-primary);
+  font-family: var(--mp-font-ui);
+  line-height: 1.5;
+}
+
+/* Focus is never removed without replacement. */
+:focus-visible {
+  outline: 2px solid var(--mp-focus-ring);
+  outline-offset: 2px;
+}

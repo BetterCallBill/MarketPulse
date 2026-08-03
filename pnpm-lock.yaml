@@ -13,6 +13,9 @@ importers:
       '@marketpulse/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@marketpulse/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@microsoft/signalr':
         specifier: ^8.0.7
         version: 8.0.17
@@ -69,6 +72,39 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@26.1.2)(jsdom@25.0.1)(msw@2.4.9(typescript@5.9.3))
+
+  packages/ui:
+    devDependencies:
+      '@testing-library/jest-dom':
+        specifier: ^6.5.0
+        version: 6.10.0(@testing-library/dom@10.4.1)
+      '@testing-library/react':
+        specifier: ^16.0.1
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@testing-library/user-event':
+        specifier: ^14.5.2
+        version: 14.6.1(@testing-library/dom@10.4.1)
+      '@types/react':
+        specifier: ^18.3.11
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.3.1
+        version: 18.3.7(@types/react@18.3.31)
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
