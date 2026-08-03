@@ -76,6 +76,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @marketpulse/e2e exec playwright install --with-deps chromium
+      # The service container starts with an empty SQL Server. Unlike the backend job,
+      # which gets its schema from Testcontainers via SqlServerFixture, this job talks to
+      # a real server that nothing has migrated — so it runs the same command the README
+      # gives a human as step 2. Without it the API boots, answers /health 200 (which is
+      # liveness, not readiness), and then fails every query.
+      - run: dotnet tool restore
+      - run: dotnet ef database update --project src/MarketPulse.Infrastructure
       - run: pnpm --filter @marketpulse/dashboard build
       - run: pnpm e2e
         env:

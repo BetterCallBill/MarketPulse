@@ -28,9 +28,18 @@ Running it:
 
 ```bash
 docker compose up -d
+dotnet ef database update --project src/MarketPulse.Infrastructure
 pnpm --filter @marketpulse/dashboard build   # Playwright serves the production build
 pnpm e2e
 ```
+
+The migration step is not optional and is the one thing that separates this level from
+every other. The backend integration tests get their schema from Testcontainers via
+`SqlServerFixture`, which migrates a throwaway instance itself; the E2E suite runs the real
+API against a real SQL Server that nothing has prepared. Skipping it produces a confusing
+failure rather than an obvious one: the API starts, `/health` answers 200 because it
+reports liveness rather than readiness, Playwright concludes the server is up, and all
+three specs then fail on queries against a database that does not exist.
 
 Playwright starts both servers itself (`dotnet run` and `vite preview`) and waits on
 `/health` — which exists precisely so there is an unauthenticated 200 to poll, since

@@ -364,7 +364,9 @@ RabbitMQ) — none of that exists yet, so don't run it expecting it to work.
 docker compose up -d
 
 # 2. Apply database migrations (creates the schema and seeds reference tickers +
-#    the dev user's watchlist; safe to re-run)
+#    the dev user's watchlist; safe to re-run). `dotnet ef` is pinned as a local
+#    tool in .config/dotnet-tools.json, so restore it once first.
+dotnet tool restore
 dotnet ef database update --project src/MarketPulse.Infrastructure
 
 # 3. Start the API (serves REST + the SignalR hub) — http://localhost:5100
@@ -431,10 +433,13 @@ dotnet test                                  # Backend unit + integration (Testc
 pnpm test                                    # Frontend unit + integration (Vitest + MSW)
 pnpm typecheck                               # tsc --noEmit across every workspace package
 
-# E2E journeys (Playwright + Chromium). Needs SQL Server up and a production
-# dashboard build — Playwright starts the API and the preview server itself.
+# E2E journeys (Playwright + Chromium). Needs SQL Server up, a migrated database,
+# and a production dashboard build — Playwright starts the API and the preview
+# server itself. Unlike `dotnet test`, this talks to your real local SQL Server
+# rather than a throwaway Testcontainers instance, so the schema must already exist.
 pnpm --filter @marketpulse/e2e exec playwright install chromium   # once
 docker compose up -d
+dotnet ef database update --project src/MarketPulse.Infrastructure
 pnpm --filter @marketpulse/dashboard build
 pnpm e2e
 ```
