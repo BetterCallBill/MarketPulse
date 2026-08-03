@@ -15,7 +15,12 @@ describe('streamReducer', () => {
       receivedAt: 1000,
     });
 
-    expect(next.prices['IVV']).toEqual({ price: 62.4, receivedAt: 1000 });
+    expect(next.prices['IVV']).toEqual({
+      price: 62.4,
+      receivedAt: 1000,
+      direction: 'neutral',
+      seq: 1,
+    });
   });
 
   it('overwrites an earlier price for the same ticker', () => {
@@ -44,6 +49,65 @@ describe('streamReducer', () => {
     const dropped = streamReducer(initialStreamState, { type: 'reconnecting' });
 
     expect(streamReducer(dropped, { type: 'connected' }).status).toBe('connected');
+  });
+
+  it('marks the first tick for a ticker as neutral', () => {
+    const next = streamReducer(initialStreamState, {
+      type: 'tick', ticker: 'IVV', price: 62.4, receivedAt: 1000,
+    });
+
+    expect(next.prices['IVV']?.direction).toBe('neutral');
+    expect(next.prices['IVV']?.seq).toBe(1);
+  });
+
+  it('marks a higher price as up', () => {
+    const first = streamReducer(initialStreamState, {
+      type: 'tick', ticker: 'IVV', price: 62.4, receivedAt: 1000,
+    });
+    const second = streamReducer(first, {
+      type: 'tick', ticker: 'IVV', price: 62.9, receivedAt: 2000,
+    });
+
+    expect(second.prices['IVV']?.direction).toBe('up');
+    expect(second.prices['IVV']?.seq).toBe(2);
+  });
+
+  it('marks a lower price as down', () => {
+    const first = streamReducer(initialStreamState, {
+      type: 'tick', ticker: 'IVV', price: 62.4, receivedAt: 1000,
+    });
+    const second = streamReducer(first, {
+      type: 'tick', ticker: 'IVV', price: 61.0, receivedAt: 2000,
+    });
+
+    expect(second.prices['IVV']?.direction).toBe('down');
+  });
+
+  it('marks an unchanged price as neutral rather than implying movement', () => {
+    const first = streamReducer(initialStreamState, {
+      type: 'tick', ticker: 'IVV', price: 62.4, receivedAt: 1000,
+    });
+    const second = streamReducer(first, {
+      type: 'tick', ticker: 'IVV', price: 62.4, receivedAt: 2000,
+    });
+
+    expect(second.prices['IVV']?.direction).toBe('neutral');
+    expect(second.prices['IVV']?.seq).toBe(2);
+  });
+
+  it('tracks direction per ticker independently', () => {
+    let state = streamReducer(initialStreamState, {
+      type: 'tick', ticker: 'IVV', price: 62.4, receivedAt: 1000,
+    });
+    state = streamReducer(state, {
+      type: 'tick', ticker: 'NDQ', price: 30.0, receivedAt: 1000,
+    });
+    state = streamReducer(state, {
+      type: 'tick', ticker: 'IVV', price: 63.0, receivedAt: 2000,
+    });
+
+    expect(state.prices['IVV']?.direction).toBe('up');
+    expect(state.prices['NDQ']?.direction).toBe('neutral');
   });
 });
 

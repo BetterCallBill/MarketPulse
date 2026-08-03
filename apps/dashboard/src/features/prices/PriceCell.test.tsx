@@ -36,7 +36,7 @@ describe('PriceCell live staleness', () => {
     const receivedAt = Date.now();
     const state: StreamState = {
       status: 'connected',
-      prices: { IVV: { price: 62.4, receivedAt } },
+      prices: { IVV: { price: 62.4, receivedAt, direction: 'neutral', seq: 1 } },
     };
 
     render(<Harness state={state} ticker="IVV" />);
