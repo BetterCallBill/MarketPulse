@@ -1,0 +1,19 @@
+.alert {
+  margin: 0;
+  padding: var(--mp-space-3);
+  border: 1px solid var(--mp-border-subtle);
+  border-left-width: 3px;
+  border-radius: var(--mp-radius-sm);
+  background: var(--mp-surface-raised);
+  font-size: 0.9375rem;
+}
+
+.alert[data-tone='danger'] {
+  border-left-color: var(--mp-danger);
+  color: var(--mp-danger);
+}
+
+.alert[data-tone='info'] {
+  border-left-color: var(--mp-accent);
+  color: var(--mp-text-secondary);
+}
