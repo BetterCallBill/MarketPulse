@@ -1,0 +1,16 @@
+{
+  "name": "@marketpulse/e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "echo \"e2e runs via pnpm e2e\" && exit 0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^26.1.2",
+    "typescript": "^5.6.0"
+  }
+}
