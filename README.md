@@ -403,6 +403,25 @@ reachable from JavaScript. See
 [ADR-003](docs/adr/003-cookie-based-sessions.md) for why, and for what that costs at
 deployment time.
 
+#### Required configuration outside Development
+
+`appsettings.Development.json` carries values for local work, so `dotnet run` needs no
+setup. Anywhere else, these must be supplied — all three JWT settings are `[Required]` and
+validated with `ValidateOnStart`, so the API **fails to boot** rather than starting with a
+weak or absent signing key:
+
+| Setting | Environment variable | Notes |
+|---|---|---|
+| `Jwt:SigningKey` | `Jwt__SigningKey` | HMAC-SHA256; minimum 32 characters (256 bits) |
+| `Jwt:Issuer` | `Jwt__Issuer` | Must match what the API validates on inbound tokens |
+| `Jwt:Audience` | `Jwt__Audience` | As above |
+| `ConnectionStrings:MarketPulse` | `ConnectionStrings__MarketPulse` | SQL Server connection string |
+
+The development signing key is committed in `appsettings.Development.json`. That is a
+showcase trade-off, not a pattern to copy — see
+[ADR-003](docs/adr/003-cookie-based-sessions.md); the hardening slice moves it to a secret
+store along with the seeded dev account.
+
 ### Prerequisites
 
 - .NET 10 SDK · Node.js 20+ · pnpm · Docker Desktop
