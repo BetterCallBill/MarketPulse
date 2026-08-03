@@ -47,7 +47,7 @@ With two layers, the semantic block is the only thing a second theme touches.
 
 Enforcing the rule with a test rather than a lint rule or review checklist was deliberate:
 `noPrimitiveLeak.test.ts` runs in the same `pnpm -r test` gate as everything else, so a
-primitive leak fails CI the same way a broken reducer would, with no dependency on a
+colour primitive leak fails CI the same way a broken reducer would, with no dependency on a
 reviewer noticing a hex code in a diff.
 
 ## Rejected alternatives
