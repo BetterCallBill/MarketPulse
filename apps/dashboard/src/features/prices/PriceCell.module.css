@@ -1,0 +1,65 @@
+.cell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--mp-space-1);
+}
+
+.price {
+  font-family: var(--mp-font-mono);
+  /* Prices tick constantly; without tabular figures the row jitters as digits change. */
+  font-variant-numeric: tabular-nums;
+  color: var(--mp-price-neutral);
+  transition: opacity 200ms ease;
+}
+
+.price[data-stale='true'] {
+  opacity: var(--mp-opacity-stale);
+}
+
+.arrow {
+  font-size: 0.75rem;
+  animation: flash 600ms ease-out;
+}
+
+.cell[data-direction='up'] .arrow {
+  color: var(--mp-price-up);
+}
+
+.cell[data-direction='down'] .arrow {
+  color: var(--mp-price-down);
+}
+
+.cell[data-direction='up'] .price {
+  animation: flash-up 600ms ease-out;
+}
+
+.cell[data-direction='down'] .price {
+  animation: flash-down 600ms ease-out;
+}
+
+@keyframes flash {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes flash-up {
+  from { color: var(--mp-price-up); }
+  to { color: var(--mp-price-neutral); }
+}
+
+@keyframes flash-down {
+  from { color: var(--mp-price-down); }
+  to { color: var(--mp-price-neutral); }
+}
+
+/*
+ * Motion off: the flash goes, the arrow and its colour stay. No information is
+ * carried by the animation alone.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .arrow,
+  .cell[data-direction='up'] .price,
+  .cell[data-direction='down'] .price {
+    animation: none;
+  }
+}

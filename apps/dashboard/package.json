@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@marketpulse/api-client": "workspace:*",
+    "@marketpulse/ui": "workspace:*",
     "@microsoft/signalr": "^8.0.7",
     "@tanstack/react-query": "^5.59.0",
     "react": "^18.3.1",

@@ -1,0 +1,75 @@
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--mp-space-4);
+  margin-bottom: var(--mp-space-4);
+}
+
+.heading {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.addForm {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--mp-space-2);
+  margin-bottom: var(--mp-space-4);
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.table th {
+  padding: var(--mp-space-2) var(--mp-space-3);
+  border-bottom: 1px solid var(--mp-border-subtle);
+  background: var(--mp-surface-raised);
+  color: var(--mp-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+}
+
+.table td {
+  padding: var(--mp-space-3);
+  border-bottom: 1px solid var(--mp-border-subtle);
+}
+
+.table tbody tr:hover {
+  background: var(--mp-surface-hover);
+}
+
+.ticker {
+  font-family: var(--mp-font-mono);
+  font-weight: 600;
+}
+
+.numeric {
+  text-align: right;
+}
+
+.actions {
+  width: 1%;
+  text-align: right;
+}
+
+.empty {
+  padding: var(--mp-space-8) var(--mp-space-4);
+  text-align: center;
+  color: var(--mp-text-muted);
+}
+
+.notice {
+  margin: 0 0 var(--mp-space-4);
+  color: var(--mp-text-muted);
+}

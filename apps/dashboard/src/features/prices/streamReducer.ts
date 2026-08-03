@@ -2,9 +2,19 @@ export const STALE_AFTER_MS = 10_000;
 
 export type StreamStatus = 'connecting' | 'connected' | 'reconnecting';
 
+export type TickDirection = 'up' | 'down' | 'neutral';
+
+export interface PriceEntry {
+  price: number;
+  receivedAt: number;
+  direction: TickDirection;
+  /** Increments per tick. Exists so the flash animation can be restarted deterministically. */
+  seq: number;
+}
+
 export interface StreamState {
   status: StreamStatus;
-  prices: Record<string, { price: number; receivedAt: number }>;
+  prices: Record<string, PriceEntry>;
 }
 
 export type StreamAction =
@@ -16,14 +26,31 @@ export const initialStreamState: StreamState = { status: 'connecting', prices: {
 
 export function streamReducer(state: StreamState, action: StreamAction): StreamState {
   switch (action.type) {
-    case 'tick':
+    case 'tick': {
+      const previous = state.prices[action.ticker];
+
+      // A first tick has nothing to compare against, and an unchanged price did not
+      // move — neither should flash, because a flash asserts movement.
+      const direction: TickDirection =
+        previous === undefined || action.price === previous.price
+          ? 'neutral'
+          : action.price > previous.price
+            ? 'up'
+            : 'down';
+
       return {
         ...state,
         prices: {
           ...state.prices,
-          [action.ticker]: { price: action.price, receivedAt: action.receivedAt },
+          [action.ticker]: {
+            price: action.price,
+            receivedAt: action.receivedAt,
+            direction,
+            seq: (previous?.seq ?? 0) + 1,
+          },
         },
       };
+    }
     case 'connected':
       return { ...state, status: 'connected' };
     case 'reconnecting':

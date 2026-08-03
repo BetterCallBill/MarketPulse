@@ -1,5 +1,7 @@
+import { Alert, Button, Panel, TextField } from '@marketpulse/ui';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import styles from './AuthScreen.module.css';
 import { useLogin } from './useSession';
 
 export function LoginScreen() {
@@ -14,45 +16,49 @@ export function LoginScreen() {
   }
 
   return (
-    <section aria-labelledby="login-heading">
-      <h2 id="login-heading">Sign in</h2>
-
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="login-email">Email</label>
-        <input
-          id="login-email"
-          type="email"
-          autoComplete="username"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-
-        <label htmlFor="login-password">Password</label>
-        <input
-          id="login-password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-
-        <button type="submit" disabled={login.isPending}>
+    <section className={styles.screen} aria-labelledby="login-heading">
+      <Panel>
+        <h2 className={styles.heading} id="login-heading">
           Sign in
-        </button>
-      </form>
+        </h2>
 
-      {login.isError && (
-        <p role="alert">
-          {login.error.message}
-          {login.error.correlationId && ` (ref: ${login.error.correlationId})`}
+        <form className={styles.form} onSubmit={handleSubmit}>
+          <TextField
+            id="login-email"
+            label="Email"
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <TextField
+            id="login-password"
+            label="Password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          <Button type="submit" disabled={login.isPending}>
+            Sign in
+          </Button>
+        </form>
+
+        {login.isError && (
+          <div className={styles.error}>
+            <Alert>
+              {login.error.message}
+              {login.error.correlationId && ` (ref: ${login.error.correlationId})`}
+            </Alert>
+          </div>
+        )}
+
+        <p className={styles.footer}>
+          No account? <Link to="/register">Create one</Link>
         </p>
-      )}
-
-      <p>
-        No account? <Link to="/register">Create one</Link>
-      </p>
+      </Panel>
     </section>
   );
 }

@@ -17,12 +17,15 @@ test('a new user can register, add a ticker, watch it tick, and sign out', async
   // Registration lands on the protected watchlist.
   await expect(page.getByRole('heading', { name: 'Watchlist' })).toBeVisible();
 
-  // A brand new account starts empty.
-  await expect(page.getByRole('listitem')).toHaveCount(0);
+  // A fresh account has an empty watchlist. Asserting the empty-state copy rather than
+  // a zero count means the assertion fails if the table silently stops rendering.
+  await expect(page.getByText('No tickers yet. Add one above to start streaming prices.'))
+    .toBeVisible();
 
   await page.getByLabel('Add ticker').fill('IVV');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(page.getByText('IVV')).toBeVisible();
+  await expect(page.getByRole('row')).toHaveCount(2); // header row + IVV
 
   // The price cell is fed by SignalR, which authenticated off the same cookie. If the
   // hub rejected the connection this stays at the em-dash placeholder forever.

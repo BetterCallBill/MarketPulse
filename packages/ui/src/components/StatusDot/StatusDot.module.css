@@ -1,0 +1,22 @@
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mp-space-2);
+  font-size: 0.8125rem;
+  color: var(--mp-text-muted);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mp-text-muted);
+}
+
+.status[data-status='connected'] .dot {
+  background: var(--mp-price-up);
+}
+
+.status[data-status='reconnecting'] .dot {
+  background: var(--mp-danger);
+}
