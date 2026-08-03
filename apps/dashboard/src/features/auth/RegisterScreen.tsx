@@ -1,5 +1,7 @@
+import { Alert, Button, Panel, TextField } from '@marketpulse/ui';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import styles from './AuthScreen.module.css';
 import { useRegister } from './useSession';
 
 const MINIMUM_PASSWORD_LENGTH = 12;
@@ -19,45 +21,47 @@ export function RegisterScreen() {
   }
 
   return (
-    <section aria-labelledby="register-heading">
-      <h2 id="register-heading">Create an account</h2>
+    <section className={styles.screen} aria-labelledby="register-heading">
+      <Panel>
+        <h2 className={styles.heading} id="register-heading">
+          Create an account
+        </h2>
 
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="register-email">Email</label>
-        <input
-          id="register-email"
-          type="email"
-          autoComplete="username"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
+        <form className={styles.form} onSubmit={handleSubmit}>
+          <TextField
+            id="register-email"
+            label="Email"
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <TextField
+            id="register-password"
+            label="Password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            hint={`At least ${MINIMUM_PASSWORD_LENGTH} characters. A memorable phrase beats a short, complicated password.`}
+            required
+          />
+          <Button type="submit" disabled={register.isPending || tooShort}>
+            Create account
+          </Button>
+        </form>
 
-        <label htmlFor="register-password">Password</label>
-        <input
-          id="register-password"
-          type="password"
-          autoComplete="new-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          aria-describedby="password-hint"
-          required
-        />
-        <p id="password-hint">
-          At least {MINIMUM_PASSWORD_LENGTH} characters. A memorable phrase beats a short,
-          complicated password.
+        {register.isError && (
+          <div className={styles.error}>
+            <Alert>{register.error.message}</Alert>
+          </div>
+        )}
+
+        <p className={styles.footer}>
+          Already registered? <Link to="/login">Sign in</Link>
         </p>
-
-        <button type="submit" disabled={register.isPending || tooShort}>
-          Create account
-        </button>
-      </form>
-
-      {register.isError && <p role="alert">{register.error.message}</p>}
-
-      <p>
-        Already registered? <Link to="/login">Sign in</Link>
-      </p>
+      </Panel>
     </section>
   );
 }

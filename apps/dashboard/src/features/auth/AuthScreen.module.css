@@ -1,0 +1,29 @@
+.screen {
+  max-width: 24rem;
+  margin: var(--mp-space-8) auto;
+}
+
+.heading {
+  margin: 0 0 var(--mp-space-5);
+  font-size: 1.25rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-4);
+}
+
+.footer {
+  margin: var(--mp-space-5) 0 0;
+  font-size: 0.875rem;
+  color: var(--mp-text-muted);
+}
+
+.footer a {
+  color: var(--mp-accent);
+}
+
+.error {
+  margin-top: var(--mp-space-4);
+}
