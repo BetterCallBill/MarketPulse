@@ -101,11 +101,15 @@ src/
 ```
 apps/dashboard          # Main React app
 apps/alerts-mfe         # Module Federation micro-frontend (alerts UI)
-packages/ui             # Design system + Storybook
+packages/ui             # Design tokens + primitives (Storybook: not yet)
 packages/api-client     # Typed API layer, zod-validated, OpenAPI-generated DTOs
 packages/emitter        # Standalone ES module event emitter
 ```
 
+- **Design tokens in two layers:** primitives hold raw values, semantic tokens hold meaning,
+  and components may reference only the semantic layer — enforced by a test, not convention.
+  Contrast ratios are computed against WCAG AA in CI rather than eyeballed. See
+  [ADR-008](docs/adr/008-design-tokens.md)
 - **Two-layer state architecture:** server state in TanStack Query, client/UI state in Zustand — rationale in [ADR-007](docs/adr/007-state-architecture.md)
 - Components never call `fetch` directly — all data access flows through `packages/api-client`
 
