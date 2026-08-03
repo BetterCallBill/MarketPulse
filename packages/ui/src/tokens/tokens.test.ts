@@ -73,6 +73,9 @@ const TEXT_PAIRS: Array<[string, string]> = [
   ['--mp-price-up', '--mp-surface-hover'],
   ['--mp-price-down', '--mp-surface-hover'],
   ['--mp-danger', '--mp-surface-hover'],
+  ['--mp-price-neutral', '--mp-surface-base'],
+  ['--mp-price-neutral', '--mp-surface-raised'],
+  ['--mp-price-neutral', '--mp-surface-hover'],
 ];
 
 describe('design tokens', () => {

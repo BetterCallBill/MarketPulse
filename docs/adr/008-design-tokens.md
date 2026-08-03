@@ -71,10 +71,14 @@ because components never reference a primitive directly.
 Every new component owes a contrast check. `tokens.test.ts` computes WCAG contrast ratios
 by parsing `tokens.css`, resolving each semantic token's `var()` chain down to a literal
 hex value, and checking it against the relevant AA threshold (4.5:1 for body text, 3:1 for
-UI boundaries like the focus ring) for every foreground/background pairing currently in use.
-Adding a token pairing that isn't in that list gets no contrast coverage; the test is the
-enforcement point, not a design review, so a new component's colour choices should extend
-the pairing list rather than trust that someone will eyeball it.
+UI boundaries like the focus ring) for every *text* foreground/background pairing the
+components currently produce. Adding a token pairing that isn't in that list gets no
+contrast coverage; the test is the enforcement point, not a design review, so a new
+component's colour choices should extend the pairing list rather than trust that someone
+will eyeball it. Non-text colour, such as `StatusDot`'s indicator dot, is outside this
+check entirely — `StatusDot` compensates by never using colour as the only signal: the
+connection state renders as a text label ("Live", "Connecting…", "Reconnecting…") alongside
+the dot, not the dot alone.
 
 **No visual-regression testing exists.** Storybook was deferred — it is a heavy dependency,
 a config surface, and a CI job, added in a slice whose stated purpose was that the app
