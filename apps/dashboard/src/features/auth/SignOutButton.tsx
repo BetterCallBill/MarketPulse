@@ -1,4 +1,6 @@
+import { Button } from '@marketpulse/ui';
 import { useNavigate } from 'react-router-dom';
+import styles from '../../app.module.css';
 import { useLogout, useSession } from './useSession';
 
 export function SignOutButton() {
@@ -9,14 +11,14 @@ export function SignOutButton() {
   if (!session) return null;
 
   return (
-    <div>
-      <span>{session.email}</span>
-      <button
-        type="button"
+    <div className={styles.session}>
+      <span className={styles.email}>{session.email}</span>
+      <Button
+        variant="ghost"
         onClick={() => logout.mutate(undefined, { onSuccess: () => navigate('/login') })}
       >
         Sign out
-      </button>
+      </Button>
     </div>
   );
 }
