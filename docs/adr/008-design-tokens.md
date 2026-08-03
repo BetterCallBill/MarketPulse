@@ -21,15 +21,19 @@ structure that could carry a dark theme now without making a second theme expens
   `--mp-text-primary`, `--mp-price-up`, `--mp-focus-ring`. Each resolves through a `var()`
   chain down to a primitive literal.
 
-Components may reference only the semantic layer. That indirection is what makes a second
-theme a redefinition of the semantic block in `tokens.css` rather than a hunt through every
-component for a hardcoded primitive or hex value. The rule is enforced by
+Components may reference only the semantic layer for colour. Colour is where an
+unindirected reference creates a re-theming hazard, so it is the layer the rule covers.
+Space, radius, and type primitives have no semantic counterpart to indirect through — there
+is no `--mp-space-primary` — so components reference `--mp-space-4`, `--mp-radius-sm`, and
+`--mp-font-mono` directly. That indirection on colour is what makes a second theme a
+redefinition of the semantic block in `tokens.css` rather than a hunt through every
+component for a hardcoded colour primitive or hex value. The rule is enforced by
 `noPrimitiveLeak.test.ts`, which walks every CSS Module under `packages/ui/src/components`
-and fails if a line matches a primitive token name or a raw hex literal — a leak guard, not
-a convention documented in a comment that nobody reads.
+and fails if a line matches a colour primitive token name or a raw hex literal — a leak
+guard, not a convention documented in a comment that nobody reads.
 
-Component styling itself is CSS Modules, colocated with each component, consuming only the
-semantic custom properties.
+Component styling itself is CSS Modules, colocated with each component, consuming the
+semantic colour tokens and the space/radius/type primitives directly.
 
 ## Rationale
 
@@ -66,7 +70,7 @@ reviewer noticing a hex code in a diff.
 
 A light theme is a redefinition of the semantic block in `tokens.css` — new values for
 `--mp-surface-base`, `--mp-text-primary`, and the rest — not a rewrite of any component,
-because components never reference a primitive directly.
+because components never reference a colour primitive directly.
 
 Every new component owes a contrast check. `tokens.test.ts` computes WCAG contrast ratios
 by parsing `tokens.css`, resolving each semantic token's `var()` chain down to a literal
@@ -85,7 +89,7 @@ a config surface, and a CI job, added in a slice whose stated purpose was that t
 looked bad, and primitives are already covered by Vitest + RTL regardless of whether
 Storybook exists. Without Storybook there is nowhere to hang a visual snapshot, so nothing
 in this system verifies that a component *looks* correct — only that its tokens resolve to
-values with sufficient contrast and that no component leaked a primitive. Appearance is
+values with sufficient contrast and that no component leaked a colour primitive. Appearance is
 reviewed by eye. This is a real gap, not a covered one: a change that breaks layout,
 spacing, or visual hierarchy while leaving contrast and token usage correct would pass every
 automated check in this repository.

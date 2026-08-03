@@ -1,12 +1,9 @@
+// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-// Assigned to a variable (rather than inlined) so Vite's static `new URL(x, import.meta.url)`
-// asset-URL analysis doesn't intercept it under the jsdom test environment and rewrite it to a
-// http://localhost:3000/... dev-server URL instead of the real file:// URL.
-const tokensUrl = import.meta.url;
-const css = readFileSync(fileURLToPath(new URL('./tokens.css', tokensUrl)), 'utf8');
+const css = readFileSync(fileURLToPath(new URL('./tokens.css', import.meta.url)), 'utf8');
 
 function declaredTokens(source: string): Map<string, string> {
   const tokens = new Map<string, string>();

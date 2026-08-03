@@ -36,7 +36,7 @@ export function WatchlistScreen() {
       </div>
 
       {stream.status === 'reconnecting' && (
-        <p role="status" className={styles.empty}>
+        <p role="status" className={styles.notice}>
           Reconnecting to the price feed…
         </p>
       )}

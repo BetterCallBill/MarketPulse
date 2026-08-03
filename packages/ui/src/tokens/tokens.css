@@ -2,9 +2,11 @@
  * Two layers, and one rule.
  *
  * PRIMITIVES hold raw values and carry no meaning. SEMANTIC tokens reference
- * primitives and carry meaning. Components may use ONLY semantic tokens — that
- * indirection is what makes a second theme a rewrite of this file rather than a
- * hunt through every component. noPrimitiveLeak.test.ts enforces it.
+ * primitives and carry meaning. Components may use ONLY semantic tokens for
+ * colour — that indirection is what makes a second theme a rewrite of this file
+ * rather than a hunt through every component. Space, radius, and type primitives
+ * have no semantic counterpart, so components consume those directly.
+ * noPrimitiveLeak.test.ts enforces the colour rule.
  */
 :root {
   /* ---- Primitives: colour ---- */

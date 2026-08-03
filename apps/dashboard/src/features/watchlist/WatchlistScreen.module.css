@@ -68,3 +68,8 @@
   text-align: center;
   color: var(--mp-text-muted);
 }
+
+.notice {
+  margin: 0 0 var(--mp-space-4);
+  color: var(--mp-text-muted);
+}

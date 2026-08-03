@@ -14,7 +14,7 @@ function cssFilesUnder(directory: string): string[] {
   });
 }
 
-/** Primitive tokens and raw hex are the two ways a component can escape the semantic layer. */
+/** Colour primitive tokens and raw hex are the two ways a component can escape the semantic colour layer. */
 const FORBIDDEN = /--mp-(grey|green|red|blue)-|#[0-9a-fA-F]{3,8}\b/;
 
 describe('component stylesheets', () => {
@@ -24,7 +24,7 @@ describe('component stylesheets', () => {
     expect(files.length).toBeGreaterThan(0);
   });
 
-  it.each(files)('%s references only semantic tokens', (file) => {
+  it.each(files)('%s references only semantic colour tokens', (file) => {
     const offending = readFileSync(file, 'utf8')
       .split('\n')
       .filter((line) => FORBIDDEN.test(line));
