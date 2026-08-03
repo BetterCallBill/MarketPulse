@@ -82,6 +82,10 @@ jobs:
       # gives a human as step 2. Without it the API boots, answers /health 200 (which is
       # liveness, not readiness), and then fails every query.
       - run: dotnet tool restore
+      # `dotnet ef` reads project metadata, so the project needs its assets file. Jobs
+      # share no state, and this one has not restored or built anything yet — the backend
+      # job's restore does not carry over.
+      - run: dotnet restore
       - run: dotnet ef database update --project src/MarketPulse.Infrastructure
       - run: pnpm --filter @marketpulse/dashboard build
       - run: pnpm e2e
