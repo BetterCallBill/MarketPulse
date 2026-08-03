@@ -1,0 +1,12 @@
+# Line endings are normalised to LF in the repository. Without this, files the .NET
+# tooling writes with CRLF (project files, launchSettings.json) sit alongside LF files,
+# and any editor that rewrites one produces a whole-file diff for a one-line change —
+# which is exactly how a three-key addition to appsettings.json turned into a 30-line
+# diff during slice 2.
+* text=auto eol=lf
+
+# Checked-in binaries must never be line-ending converted.
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
