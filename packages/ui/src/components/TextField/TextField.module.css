@@ -1,0 +1,29 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-1);
+}
+
+.label {
+  font-size: 0.875rem;
+  color: var(--mp-text-secondary);
+}
+
+.input {
+  padding: var(--mp-space-2) var(--mp-space-3);
+  background: var(--mp-surface-base);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-sm);
+  color: var(--mp-text-primary);
+  font: inherit;
+}
+
+.input:hover {
+  border-color: var(--mp-text-muted);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--mp-text-muted);
+}
