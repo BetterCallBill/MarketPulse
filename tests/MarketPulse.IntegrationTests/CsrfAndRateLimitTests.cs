@@ -20,24 +20,7 @@ public class CsrfAndRateLimitTests(SqlServerFixture fixture)
     /// </summary>
     private WebApplicationFactory<Program> CreateFactory(
         Dictionary<string, string?>? overrides = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-        {
-            b.UseEnvironment(Environments.Development);
-
-            if (overrides is not null)
-            {
-                b.ConfigureAppConfiguration(c => c.AddInMemoryCollection(overrides));
-            }
-
-            b.ConfigureServices(services =>
-            {
-                var descriptor = services.Single(
-                    d => d.ServiceType == typeof(DbContextOptions<MarketPulseDbContext>));
-                services.Remove(descriptor);
-                services.AddDbContext<MarketPulseDbContext>(
-                    o => o.UseSqlServer(fixture.ConnectionString));
-            });
-        });
+        TestFactory.Create(fixture, overrides);
 
     [Fact]
     public async Task A_mutation_without_the_csrf_header_is_rejected_with_403()

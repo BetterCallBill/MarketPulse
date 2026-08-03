@@ -17,18 +17,7 @@ public class AuthApiTests(SqlServerFixture fixture) : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-        {
-            b.UseEnvironment(Environments.Development);
-            b.ConfigureServices(services =>
-            {
-                var descriptor = services.Single(
-                    d => d.ServiceType == typeof(DbContextOptions<MarketPulseDbContext>));
-                services.Remove(descriptor);
-                services.AddDbContext<MarketPulseDbContext>(
-                    o => o.UseSqlServer(fixture.ConnectionString));
-            });
-        });
+        _factory = TestFactory.Create(fixture);
 
         return Task.CompletedTask;
     }
@@ -256,6 +245,34 @@ public class AuthApiTests(SqlServerFixture fixture) : IAsyncLifetime
         Assert.False(response.IsSuccessStatusCode,
             "A refresh token captured before logout must not still mint a session.");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+        // 401 alone does not distinguish "revoked" from the CSRF pair being rejected or the
+        // cookie never arriving; the error code pins which rejection this was.
+        var body = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+        Assert.Equal("session-revoked", body!["title"].ToString());
+    }
+
+    /// <summary>
+    /// Every test in this class shares one factory, and TestServer leaves
+    /// <c>Connection.RemoteIpAddress</c> null — so all of them land in the rate limiter's
+    /// single "unknown" partition. Against the production default of 10 requests a minute
+    /// the class was within a couple of tests of spurious 429s, and the failure would have
+    /// landed on whichever test happened to run last rather than on the one that added the
+    /// calls. This test claims that headroom deliberately so the trap springs here, on a
+    /// test whose name says what went wrong, instead of somewhere unrelated.
+    /// </summary>
+    [Fact]
+    public async Task Repeated_registrations_are_not_throttled_by_the_shared_test_partition()
+    {
+        var client = _factory.CreateClient();
+
+        for (var attempt = 0; attempt < 15; attempt++)
+        {
+            var response = await client.PostAsJsonAsync("/api/v1/auth/register",
+                new { Email = AuthenticatedClient.NewEmail(), Password = AuthenticatedClient.ValidPassword });
+
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
+        }
     }
 
     [Fact]

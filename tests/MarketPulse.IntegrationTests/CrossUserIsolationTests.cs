@@ -19,18 +19,7 @@ public class CrossUserIsolationTests(SqlServerFixture fixture) : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-        {
-            b.UseEnvironment(Environments.Development);
-            b.ConfigureServices(services =>
-            {
-                var descriptor = services.Single(
-                    d => d.ServiceType == typeof(DbContextOptions<MarketPulseDbContext>));
-                services.Remove(descriptor);
-                services.AddDbContext<MarketPulseDbContext>(
-                    o => o.UseSqlServer(fixture.ConnectionString));
-            });
-        });
+        _factory = TestFactory.Create(fixture);
 
         _alice = await AuthenticatedClient.RegisterAsync(_factory);
         _bob = await AuthenticatedClient.RegisterAsync(_factory);

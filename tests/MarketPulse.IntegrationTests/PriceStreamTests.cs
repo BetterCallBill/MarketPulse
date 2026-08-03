@@ -15,18 +15,7 @@ public class PriceStreamTests(SqlServerFixture fixture)
     [Fact]
     public async Task A_tick_reaches_a_connected_client_within_five_seconds()
     {
-        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-        {
-            b.UseEnvironment(Environments.Development);
-            b.ConfigureServices(services =>
-            {
-                var descriptor = services.Single(
-                    d => d.ServiceType == typeof(DbContextOptions<MarketPulseDbContext>));
-                services.Remove(descriptor);
-                services.AddDbContext<MarketPulseDbContext>(
-                    o => o.UseSqlServer(fixture.ConnectionString));
-            });
-        });
+        await using var factory = TestFactory.Create(fixture);
 
         var accessCookie = await AuthenticatedClient.RegisterAndGetAccessCookieAsync(factory);
 
@@ -57,18 +46,7 @@ public class PriceStreamTests(SqlServerFixture fixture)
     [Fact]
     public async Task An_unauthenticated_client_cannot_connect_to_the_hub()
     {
-        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-        {
-            b.UseEnvironment(Environments.Development);
-            b.ConfigureServices(services =>
-            {
-                var descriptor = services.Single(
-                    d => d.ServiceType == typeof(DbContextOptions<MarketPulseDbContext>));
-                services.Remove(descriptor);
-                services.AddDbContext<MarketPulseDbContext>(
-                    o => o.UseSqlServer(fixture.ConnectionString));
-            });
-        });
+        await using var factory = TestFactory.Create(fixture);
 
         var connection = new HubConnectionBuilder()
             .WithUrl("http://localhost/hubs/prices", o =>
