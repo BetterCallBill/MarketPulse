@@ -129,7 +129,7 @@ packages/emitter        # Standalone ES module event emitter
 | **Data** | SQL Server (RDS), EF Core 10, Dapper (read-heavy paths) |
 | **Messaging** | RabbitMQ, outbox pattern, Polly |
 | **Frontend** | React 18, TypeScript (strict), Vite, TanStack Query, Zustand, zod |
-| **Design system** | Storybook, CSS custom properties, @tanstack/react-virtual |
+| **Design system** | Design tokens, CSS Modules, @tanstack/react-virtual |
 | **Testing** | xUnit, NSubstitute, WebApplicationFactory, Testcontainers, Vitest, RTL, MSW, Playwright |
 | **Cloud** | AWS — ECS Fargate, Lambda, RDS, S3 + CloudFront, Secrets Manager, IAM |
 | **IaC & CI/CD** | Terraform, GitHub Actions, Docker, blue-green deploys via ECS |
@@ -254,7 +254,7 @@ packages/emitter        # Standalone ES module event emitter
 
 - **Backend:** Clean/Onion layering, CQRS via MediatR (with an honest "where it was overkill" ADR), DDD-lite aggregates, SOLID and dependency inversion enforced by project references
 - **The flagship decision:** modular monolith + one extracted microservice — both sides of the trade-off defensible from experience
-- **Frontend:** feature-sliced monorepo, Storybook design system, API-layer package, deliberate state architecture (server cache / client state / URL state)
+- **Frontend:** feature-sliced monorepo, token-driven design system, API-layer package, deliberate state architecture (server cache / client state / URL state)
 - **Micro-frontends:** Module Federation spike extracting the alerts UI — minimal but real
 - **When *not* to use patterns:** every ADR includes a "rejected alternatives" section
 
@@ -333,7 +333,7 @@ marketpulse-pro/
 │   ├── dashboard/                     # Main React app
 │   └── alerts-mfe/                    # Module Federation micro-frontend
 ├── packages/
-│   ├── ui/                            # Design system + Storybook
+│   ├── ui/                            # Design tokens + primitives (Storybook: not yet)
 │   ├── api-client/                    # Typed API layer (zod + OpenAPI-generated DTOs)
 │   └── emitter/                       # Standalone ES module event emitter
 ├── tests/

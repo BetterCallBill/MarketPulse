@@ -66,8 +66,13 @@ const TEXT_PAIRS: Array<[string, string]> = [
   ['--mp-price-down', '--mp-surface-base'],
   ['--mp-price-down', '--mp-surface-raised'],
   ['--mp-accent', '--mp-surface-base'],
+  ['--mp-accent', '--mp-surface-raised'],
   ['--mp-danger', '--mp-surface-base'],
   ['--mp-danger', '--mp-surface-raised'],
+  ['--mp-text-primary', '--mp-surface-hover'],
+  ['--mp-price-up', '--mp-surface-hover'],
+  ['--mp-price-down', '--mp-surface-hover'],
+  ['--mp-danger', '--mp-surface-hover'],
 ];
 
 describe('design tokens', () => {
