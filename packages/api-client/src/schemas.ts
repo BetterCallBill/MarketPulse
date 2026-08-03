@@ -23,7 +23,13 @@ export const problemDetailsSchema = z.object({
   correlationId: z.string().optional(),
 });
 
+export const sessionSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+});
+
 export type WatchlistItem = z.infer<typeof watchlistItemSchema>;
 export type Watchlist = z.infer<typeof watchlistSchema>;
 export type Tick = z.infer<typeof tickSchema>;
 export type ProblemDetails = z.infer<typeof problemDetailsSchema>;
+export type Session = z.infer<typeof sessionSchema>;
