@@ -14,7 +14,7 @@ namespace MarketPulse.Api.Middleware;
 /// control. Chosen over the framework's IAntiforgery because that is oriented around MVC
 /// form posts rather than a JSON API.
 /// </summary>
-public sealed class CsrfMiddleware(RequestDelegate next)
+public sealed class CsrfMiddleware(RequestDelegate next, ILogger<CsrfMiddleware> logger)
 {
     public const string HeaderName = "X-CSRF-Token";
 
@@ -51,6 +51,17 @@ public sealed class CsrfMiddleware(RequestDelegate next)
 
         if (string.IsNullOrEmpty(cookie) || string.IsNullOrEmpty(header) || !Matches(cookie, header))
         {
+            // Neither half of the pair is logged: the nonce is the secret this check rests
+            // on, and ExceptionHandlingMiddleware attaches the correlation id that ties this
+            // line to the response the caller saw.
+            logger.LogWarning(
+                "CSRF validation failed for {Method} {Path}. Cookie present: {HasCookie}, " +
+                "header present: {HasHeader}.",
+                context.Request.Method,
+                context.Request.Path,
+                !string.IsNullOrEmpty(cookie),
+                !string.IsNullOrEmpty(header));
+
             // Thrown rather than written directly so ExceptionHandlingMiddleware, which sits
             // above this in the pipeline, produces the same ProblemDetails shape as
             // everything else.
