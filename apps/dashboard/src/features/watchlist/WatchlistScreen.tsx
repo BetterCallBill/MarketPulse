@@ -1,8 +1,10 @@
+import { Alert, Button, Panel, StatusDot, TextField, VisuallyHidden } from '@marketpulse/ui';
 import { useState, type FormEvent } from 'react';
 import { PriceCell } from '../prices/PriceCell';
 import { isStale } from '../prices/streamReducer';
 import { useNow } from '../prices/useNow';
 import { usePriceStream } from '../prices/usePriceStream';
+import styles from './WatchlistScreen.module.css';
 import { useAddItem, useRemoveItem, useWatchlist } from './useWatchlist';
 
 export function WatchlistScreen() {
@@ -26,52 +28,88 @@ export function WatchlistScreen() {
 
   return (
     <section aria-labelledby="watchlist-heading">
-      <h2 id="watchlist-heading">Watchlist</h2>
+      <div className={styles.header}>
+        <h2 className={styles.heading} id="watchlist-heading">
+          Watchlist
+        </h2>
+        <StatusDot status={stream.status} />
+      </div>
 
       {stream.status === 'reconnecting' && (
-        <p role="status">Reconnecting to the price feed…</p>
+        <p role="status" className={styles.empty}>
+          Reconnecting to the price feed…
+        </p>
       )}
 
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="add-ticker">Add ticker</label>
-        <input
+      <form className={styles.addForm} onSubmit={handleSubmit}>
+        <TextField
           id="add-ticker"
+          label="Add ticker"
           value={ticker}
           onChange={(e) => setTicker(e.target.value)}
           maxLength={8}
         />
-        <button type="submit" disabled={addItem.isPending}>
+        <Button type="submit" disabled={addItem.isPending}>
           Add
-        </button>
+        </Button>
       </form>
 
       {addItem.isError && (
-        <p role="alert">
+        <Alert>
           {addItem.error.message}
           {addItem.error.correlationId && ` (ref: ${addItem.error.correlationId})`}
-        </p>
+        </Alert>
       )}
 
-      <ul>
-        {data.items.map((item) => (
-          <li key={item.ticker}>
-            <span>{item.ticker}</span>
-            <PriceCell
-              ticker={item.ticker}
-              price={stream.prices[item.ticker]?.price}
-              stale={isStale(stream, item.ticker, now)}
-              disconnected={stream.status === 'reconnecting'}
-            />
-            <button
-              type="button"
-              onClick={() => removeItem.mutate(item.ticker)}
-              aria-label={`Remove ${item.ticker}`}
-            >
-              Remove
-            </button>
-          </li>
-        ))}
-      </ul>
+      <Panel className={styles.tableWrap}>
+        {data.items.length === 0 ? (
+          <p className={styles.empty}>No tickers yet. Add one above to start streaming prices.</p>
+        ) : (
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">Ticker</th>
+                <th scope="col" className={styles.numeric}>
+                  Last
+                </th>
+                <th scope="col" className={styles.actions}>
+                  <VisuallyHidden>Actions</VisuallyHidden>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.map((item) => {
+                const entry = stream.prices[item.ticker];
+
+                return (
+                  <tr key={item.ticker}>
+                    <td className={styles.ticker}>{item.ticker}</td>
+                    <td className={styles.numeric}>
+                      <PriceCell
+                        ticker={item.ticker}
+                        price={entry?.price}
+                        stale={isStale(stream, item.ticker, now)}
+                        disconnected={stream.status === 'reconnecting'}
+                        direction={entry?.direction ?? 'neutral'}
+                        seq={entry?.seq ?? 0}
+                      />
+                    </td>
+                    <td className={styles.actions}>
+                      <Button
+                        variant="danger"
+                        onClick={() => removeItem.mutate(item.ticker)}
+                        aria-label={`Remove ${item.ticker}`}
+                      >
+                        Remove
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Panel>
     </section>
   );
 }
