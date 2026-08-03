@@ -334,8 +334,8 @@ marketpulse-pro/
 │   └── emitter/                       # Standalone ES module event emitter
 ├── tests/
 │   ├── MarketPulse.UnitTests/         # xUnit + NSubstitute
-│   └── MarketPulse.IntegrationTests/  # WebApplicationFactory + Testcontainers
-├── e2e/                               # Playwright suites
+│   ├── MarketPulse.IntegrationTests/  # WebApplicationFactory + Testcontainers
+│   └── e2e/                           # Playwright suites
 ├── infra/                             # Terraform (ECS, Lambda, RDS, S3, IAM, VPC)
 ├── docs/
 │   ├── adr/                           # Architecture Decision Records
@@ -353,11 +353,11 @@ marketpulse-pro/
 
 ## Getting started
 
-### Slice 1 — what actually runs today
+### Slices 1–2 — what actually runs today
 
 These four commands are the real, runnable path on this branch. The "Local development"
-block further down describes the target shape for later phases (an Alerts worker, RabbitMQ,
-E2E tests) — none of that exists yet, so don't run it expecting it to work.
+block further down describes the target shape for later phases (an Alerts worker,
+RabbitMQ) — none of that exists yet, so don't run it expecting it to work.
 
 ```bash
 # 1. Start infrastructure (SQL Server)
@@ -376,6 +376,30 @@ pnpm install && pnpm --filter @marketpulse/dashboard dev
 
 The dashboard talks to the API at `http://localhost:5100` by default; override with the
 `VITE_API_URL` environment variable if you run the API on a different port.
+
+#### Signing in
+
+The app requires a real account — every route but `/login` and `/register` is closed, and
+the API rejects unauthenticated requests. There are two ways in at
+`http://localhost:5173/login`:
+
+| | Email | Password |
+|---|---|---|
+| **Seeded dev account** | `dev@marketpulse.local` | `DevPassw0rd!2026` |
+| **A new account** | anything you like, via `/register` | at least 12 characters |
+
+The dev account is a development convenience so a clean clone has something to look at: it
+owns the four seeded tickers, and its password hash is a committed constant because EF
+Core's `HasData` requires determinism. The hardening slice removes it — do not deploy this
+seed anywhere real.
+
+A newly registered account starts with an **empty** watchlist. That is correct, not a bug:
+add a ticker and it begins receiving live prices immediately.
+
+Sessions live in `httpOnly` cookies, so a page reload keeps you signed in and no token is
+reachable from JavaScript. See
+[ADR-003](docs/adr/003-cookie-based-sessions.md) for why, and for what that costs at
+deployment time.
 
 ### Prerequisites
 
@@ -404,9 +428,19 @@ pnpm install && pnpm --filter dashboard dev
 
 ```bash
 dotnet test                                  # Backend unit + integration (Testcontainers)
-pnpm --filter dashboard test                 # Frontend unit + integration (Vitest + MSW)
-pnpm --filter e2e playwright test            # E2E journeys
+pnpm test                                    # Frontend unit + integration (Vitest + MSW)
+pnpm typecheck                               # tsc --noEmit across every workspace package
+
+# E2E journeys (Playwright + Chromium). Needs SQL Server up and a production
+# dashboard build — Playwright starts the API and the preview server itself.
+pnpm --filter @marketpulse/e2e exec playwright install chromium   # once
+docker compose up -d
+pnpm --filter @marketpulse/dashboard build
+pnpm e2e
 ```
+
+See [docs/TESTING.md](docs/TESTING.md) for what each level covers and which gaps are
+deliberate.
 
 ---
 
