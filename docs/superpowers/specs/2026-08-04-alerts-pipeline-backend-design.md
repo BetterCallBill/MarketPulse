@@ -195,19 +195,33 @@ with the observability slice, where there is somewhere to see it happening.
 
 ### Correlation
 
-`CorrelationIdMiddleware` already stamps every request. That value is written onto the
-`OutboxMessage` row, set as the AMQP `correlation_id` property on publish, and pushed into the
-worker's log scope on consume — so one identifier spans browser → API → queue → worker. The
-observability slice inherits this rather than retrofitting it.
+`CorrelationIdMiddleware` already stamps every request, and alert-rule CRUD inherits that for
+free. The alert *delivery* path does not: it begins with a tick, not a request, so there is no
+ambient id to propagate.
+
+So the tick sink mints one per tick, and it is then carried the length of the chain — into the
+worker's log scope on consume, onto the `OutboxMessage` row, onto the AMQP `correlation_id`
+property when the dispatcher publishes, and into the API consumer's log scope. One searchable
+value spans tick → worker → queue → API → user. Worth stating precisely, because "correlation
+IDs propagate from browser → API → queue → worker" (README, line 282) describes a
+request-originated flow, and this one is not: the browser is the destination here, not the
+source. The observability slice inherits the mechanism either way.
 
 ### Domain model
 
 **`AlertRule`** — `Id`, `UserId`, `Ticker`, `Direction` (`Above` | `Below`), `Threshold`,
 `Status` (`Active` | `Triggered`), `CreatedUtc`, `TriggeredUtc?`, `TriggeredPrice?`,
 `RowVersion`. Two states only: a "paused" state has no way to be reached from the API this
-slice ships, and deleting a rule is one request. Invariants on the aggregate: threshold strictly positive,
-ticker present in reference data, and a limit of 20 rules per user — mirroring
-`Watchlist.MaxItems`, and for the same reason.
+slice ships, and deleting a rule is one request. The aggregate enforces what it can see —
+threshold strictly positive, and the legality of each status transition.
+
+The 20-rule-per-user limit (`AlertRule.MaxPerUser`, mirroring `Watchlist.MaxItems` and for the
+same reason) is enforced in the create handler against a count query, and the unknown-ticker
+check in a FluentValidation rule against reference data, exactly as `AddWatchlistItemValidator`
+does. Neither can live on the aggregate: unlike `Watchlist`, which owns its items and can
+therefore count them, an `AlertRule` is a standalone row that can see neither its siblings nor
+the ticker table. Worth stating because it is a real difference in aggregate design between two
+features that otherwise look alike.
 
 **`Notification`** — `Id`, `UserId`, `MessageId` (unique), `AlertRuleId`, `Ticker`,
 `Direction`, `Threshold`, `TriggeredPrice`, `OccurredUtc`, `IsRead`, `CreatedUtc`. The rule is
