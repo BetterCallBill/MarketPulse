@@ -3,6 +3,7 @@ using MarketPulse.Application.Abstractions;
 using MarketPulse.Application.Configuration;
 using MarketPulse.Domain.ValueObjects;
 using MarketPulse.Infrastructure.Messaging.Contracts;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 
@@ -12,29 +13,53 @@ namespace MarketPulse.Infrastructure.Messaging;
 /// Publishes ticks to the prices exchange, fire and forget. No publisher confirms and no
 /// outbox: a tick is superseded a second later, so durability here would buy nothing and
 /// cost latency on the path that parallels the SignalR broadcast.
+///
+/// <see cref="SendAsync"/> never waits on connection establishment. <c>TickBroadcaster</c>
+/// awaits every sink in sequence for a given tick, so a call that blocked here would also
+/// stall the SignalR sink behind it for as long as the broker stayed unreachable —
+/// <c>RabbitMqConnection</c> retries a dead broker with unbounded exponential backoff, which
+/// is right for a background reconnect and wrong for anything sitting inline on that reader.
+/// If no open channel exists yet, the tick is simply dropped (ticks are lossy by design — the
+/// next one is a second away) and, if nothing is already trying, a single background attempt
+/// to (re)establish a channel is kicked off. Nobody waits for that attempt; it self-heals the
+/// sink for the ticks that follow.
 /// </summary>
 public sealed class RabbitMqTickSink(
     RabbitMqConnection connection,
-    IOptions<RabbitMqOptions> options) : ITickSink, IAsyncDisposable
+    IOptions<RabbitMqOptions> options,
+    ILogger<RabbitMqTickSink> logger) : ITickSink, IAsyncDisposable
 {
-    // RabbitMqConnection retries a broker outage with unbounded exponential backoff (up to
-    // MaxConnectionRetryDelay per attempt, forever) — correct for a background reconnect,
-    // wrong for a call sitting inline on TickBroadcaster's single reader thread.
-    // TickBroadcaster awaits sinks one at a time, so a ChannelAsync call that never returns
-    // would freeze the SignalR sink behind it too, for as long as the broker stayed down —
-    // exactly the "sink is skipped" property the design is meant to guarantee, broken.
-    // Bounding the connection attempt here turns an unreachable broker into a fixed, small
-    // per-tick cost that TickBroadcaster's existing per-sink catch can log and skip.
-    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(2);
-
     private readonly RabbitMqOptions _options = options.Value;
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly CancellationTokenSource _shutdownCts = new();
+    private readonly object _connectGate = new();
+
     private IChannel? _channel;
+    private Task? _connectTask;
+    private volatile bool _disposed;
 
-    public async Task SendAsync(PriceTick tick, CancellationToken ct)
+    public Task SendAsync(PriceTick tick, CancellationToken ct)
     {
-        var channel = await ChannelAsync(ct);
+        if (_disposed)
+        {
+            return Task.CompletedTask;
+        }
 
+        var channel = _channel;
+
+        if (channel is { IsOpen: true })
+        {
+            return PublishAsync(channel, tick, ct);
+        }
+
+        // No channel yet — first tick ever, or the broker dropped a previous connection.
+        // Make sure exactly one background attempt is working on getting one back, and
+        // return immediately either way. This tick is not published.
+        TriggerConnect();
+        return Task.CompletedTask;
+    }
+
+    private async Task PublishAsync(IChannel channel, PriceTick tick, CancellationToken ct)
+    {
         var body = JsonSerializer.SerializeToUtf8Bytes(
             new PriceTickMessage(tick.Ticker, tick.Price, tick.TimestampUtc));
 
@@ -56,58 +81,85 @@ public sealed class RabbitMqTickSink(
             cancellationToken: ct);
     }
 
-    private async Task<IChannel> ChannelAsync(CancellationToken ct)
+    private void TriggerConnect()
     {
-        if (_channel is { IsOpen: true })
+        if (_disposed)
         {
-            return _channel;
+            return;
         }
 
-        await _gate.WaitAsync(ct);
+        lock (_connectGate)
+        {
+            if (_disposed || _connectTask is { IsCompleted: false })
+            {
+                // Either shutting down, or another tick already kicked off an attempt that
+                // hasn't finished yet — one attempt in flight at a time, and this call does
+                // not wait for it.
+                return;
+            }
 
+            _connectTask = ConnectAsync();
+        }
+    }
+
+    private async Task ConnectAsync()
+    {
         try
         {
-            if (_channel is { IsOpen: true })
+            var channel = await connection.CreateChannelAsync(
+                publisherConfirms: false, _shutdownCts.Token);
+            await RabbitMqTopology.DeclareAsync(channel, _options, _shutdownCts.Token);
+
+            if (_disposed)
             {
-                return _channel;
+                // Lost the race with DisposeAsync: nothing will ever read this channel
+                // through _channel again, so it must be closed here rather than left open.
+                await channel.DisposeAsync();
+                return;
             }
 
-            using var timeoutCts = new CancellationTokenSource(ConnectTimeout);
-            using var linked =
-                CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
-
-            try
-            {
-                _channel = await connection.CreateChannelAsync(
-                    publisherConfirms: false, linked.Token);
-                await RabbitMqTopology.DeclareAsync(_channel, _options, linked.Token);
-            }
-            catch (OperationCanceledException) when (
-                timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
-            {
-                // A genuine caller cancellation (host shutdown) is rethrown unchanged so
-                // TickBroadcaster's outer catch can still tell "stopping" apart from "the
-                // broker is unwell" — only this sink's own connect timeout is translated
-                // into a plain exception so the per-sink catch logs and skips it.
-                throw new TimeoutException(
-                    $"Timed out connecting to RabbitMQ within {ConnectTimeout}.");
-            }
-
-            return _channel;
+            _channel = channel;
         }
-        finally
+        catch (OperationCanceledException)
         {
-            _gate.Release();
+            // Host shutdown interrupted the attempt. Not logged as a failure — this is the
+            // expected way a stuck attempt ends, not the broker being unwell.
+        }
+        catch (Exception ex)
+        {
+            // Deliberately swallowed rather than rethrown: nobody awaits _connectTask, so an
+            // unhandled exception here would otherwise become an unobserved task exception.
+            // The sink is not left wedged — the next tick that finds no open channel calls
+            // TriggerConnect again and starts a fresh attempt.
+            logger.LogWarning(
+                ex, "RabbitMqTickSink failed to establish a channel; will retry on the next tick.");
         }
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_channel is not null)
+        lock (_connectGate)
         {
-            await _channel.DisposeAsync();
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
         }
 
-        _gate.Dispose();
+        // Interrupt any in-flight connection attempt. ConnectAsync catches the resulting
+        // OperationCanceledException itself, so this neither surfaces as an unobserved task
+        // exception nor requires DisposeAsync to wait for that task to unwind.
+        await _shutdownCts.CancelAsync();
+
+        var channel = Interlocked.Exchange(ref _channel, null);
+
+        if (channel is not null)
+        {
+            await channel.DisposeAsync();
+        }
+
+        _shutdownCts.Dispose();
     }
 }
