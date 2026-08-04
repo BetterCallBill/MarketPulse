@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="xunit" />
@@ -23,6 +24,7 @@
     <ProjectReference Include="..\..\src\MarketPulse.Application\MarketPulse.Application.csproj" />
     <ProjectReference Include="..\..\src\MarketPulse.Domain\MarketPulse.Domain.csproj" />
     <ProjectReference Include="..\..\src\MarketPulse.Infrastructure\MarketPulse.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\MarketPulse.Alerts\MarketPulse.Alerts.csproj" />
   </ItemGroup>
 
 </Project>

@@ -33,12 +33,12 @@ against the source tree, not against documentation.
 |---|---|---|---|
 | 1 · Backend foundation | **Partial** | Clean Architecture layering (enforced by `DependencyRuleTests`), EF Core + 3 migrations, cookie auth with refresh-token rotation, CSRF, auth rate limiting, watchlist CRUD | Portfolio aggregate, holdings, transactions |
 | 2 · Real-time core | **Partial** | SignalR hub + fan-out, `PriceTickChannel`, tick delivery to the dashboard | Real market-data feed (ticks come from `FakeTickService`, a random walk), tick persistence, Dapper history queries |
-| 3 · Messaging & alerts | **Not started** | — | RabbitMQ, outbox, Alerts worker, alert rules, notifications, chaos test |
+| 3 · Messaging & alerts | **Partial** | RabbitMQ, the outbox, the Alerts worker, alert rules, notifications, per-user delivery | Alerts UI, the chaos test |
 | 4 · Frontend core | **Partial** | `packages/ui` token system + primitives, `packages/api-client` (zod-validated, no direct `fetch` anywhere in the app), TanStack Query for server state, auth screens, watchlist table with live price cells | Client-state layer (no Zustand — ADR-007's "two-layer" claim is currently half-true), alerts and notifications UI |
 | 5 · Cloud & pipeline | **Not started** | CI runs backend tests, frontend tests, and Playwright E2E against a real database | Terraform, ECS, CloudFront/S3, Lambda snapshot, OpenTelemetry, deployment pipeline |
 | 6 · Hardening | **Not started** | Testcontainers integration suite, one E2E journey (authentication) | CSP, threat model, performance pass, RUM, load test, the documentation set |
 
-Three phases untouched, three partly built.
+Two phases untouched, four partly built.
 
 Phase 4's remainder has no slice of its own: the alerts and notifications UI lands in 4b, and
 the client-state layer lands in whichever slice first needs state that is genuinely not server
@@ -55,21 +55,14 @@ describe what the application actually does.
 | 1 · Walking skeleton | 2026-07-31 | Clean Architecture skeleton, EF Core + migrations, watchlist CRUD, SignalR fan-out off a fake tick source, CI |
 | 2 · Authentication | 2026-08-03 | Cookie sessions, refresh-token rotation, CSRF middleware, rate limiting, cross-user isolation tests, E2E auth journey |
 | 3 · Design system | 2026-08-03 | `packages/ui` two-layer design tokens, six primitives, dashboard restyle, contrast ratios asserted in CI |
+| 4a · Alerts pipeline — backend | 2026-08-04 | RabbitMQ topology, transactional outbox, the `MarketPulse.Alerts` worker, alert rule CRUD, per-user notification delivery over `NotificationHub`, ADR-009. Proven end to end by integration tests against real SQL Server and real RabbitMQ. No dashboard changes |
 
 ---
 
 ## Remaining slices
 
-Eleven slices remain. Sizing assumes the ~8-task shape of slices 1–3; slices marked **may split**
+Ten slices remain. Sizing assumes the ~8-task shape of slices 1–3; slices marked **may split**
 are the ones most likely to exceed it.
-
-### 4a · Alerts pipeline — backend · phase 3
-Alert rule CRUD, RabbitMQ, the Alerts worker, transactional outbox, notification persistence,
-per-user SignalR delivery. Proven end to end by integration tests against real SQL Server and
-real RabbitMQ. No dashboard changes.
-
-*Depends on:* nothing outstanding.
-*Spec:* [2026-08-04-alerts-pipeline-backend-design.md](superpowers/specs/2026-08-04-alerts-pipeline-backend-design.md).
 
 ### 4b · Alerts UI and chaos test · phase 3
 Alert management and notifications panel built on `packages/ui`, unread state, Playwright

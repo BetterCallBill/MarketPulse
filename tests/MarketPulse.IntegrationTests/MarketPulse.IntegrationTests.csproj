@@ -12,6 +12,7 @@
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Testcontainers.RabbitMq" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
@@ -22,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MarketPulse.Api\MarketPulse.Api.csproj" />
+    <ProjectReference Include="..\..\src\MarketPulse.Alerts\MarketPulse.Alerts.csproj" />
   </ItemGroup>
 
 </Project>

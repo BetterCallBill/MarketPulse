@@ -14,4 +14,10 @@
     <ProjectReference Include="..\MarketPulse.Infrastructure\MarketPulse.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- CsrfMiddleware.ExemptHubs is internal; CsrfMiddlewareTests reflects over it to
+         enforce that every CSRF-exempt hub declares no client-invokable methods. -->
+    <InternalsVisibleTo Include="MarketPulse.UnitTests" />
+  </ItemGroup>
+
 </Project>

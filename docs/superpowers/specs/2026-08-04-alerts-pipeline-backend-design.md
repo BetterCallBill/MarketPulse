@@ -44,6 +44,13 @@ by integration tests rather than against one being built underneath it.
 
 ### In scope
 
+*Amended 2026-08-04, during implementation.* Two rows below understate what was built.
+Infrastructure also gained `RabbitMqConsumerService`, the supervision loop both consumers
+run on (see "Broker unavailability"); and the `IOutbox` abstraction gained a `Discard`
+counterpart to `EnqueueAsync`, because an event enqueued beside a state change that then
+loses an optimistic-concurrency race must come back off the unit of work before the next
+save carries it to the broker.
+
 | Layer | Deliverable |
 |---|---|
 | Domain | `AlertRule` aggregate (`Evaluate`, `MarkTriggered`, `Rearm`, per-user limit, `RowVersion`); `Notification`; `OutboxMessage` |
@@ -75,6 +82,16 @@ Watchlists, authentication, refresh-token rotation, CSRF, rate limiting and the 
 are untouched. `PriceHub` keeps broadcasting prices to `Clients.All`. `FakeTickService` and
 `RandomWalk` are unchanged — this slice adds a second consumer of the ticks they already
 produce, not a new source.
+
+*Amended 2026-08-04, during implementation.* CSRF did not stay fully untouched. SignalR's
+negotiate handshake to `/hubs/notifications` is a POST, and `CsrfMiddleware`'s exempt-path
+list did not cover it, so connecting failed with `403` before any hub code ran.
+`/hubs/notifications` was added to the same exemption `/hubs/prices` already has. This is
+judged acceptable rather than a hole: `mp_access` is `SameSite=Lax` and CORS is credentialed
+against an explicit origin allowlist, and the exemption is safe only because the hub
+declares no client-invokable methods — a `CsrfMiddlewareTests` case now asserts that
+invariant by reflection for every hub on the exempt list, not just this one. ADR-009 records
+this as a general rule about push-only hubs, not a `NotificationHub`-specific exception.
 
 ### A channel is not a broadcast
 
@@ -147,6 +164,18 @@ That is expected under horizontal scaling, not an error: it is logged at debug, 
 acked, and nothing is published. This is the mechanism that makes ADR-001's "scales
 independently" true rather than aspirational.
 
+*Amended 2026-08-04, during implementation.* Losing that race must cost one rule, not the
+whole tick — a point the design left implicit and the first implementation got wrong by
+abandoning the remaining candidates. "IVV above 100" and "IVV above 105" are both crossed by
+a tick at 106; the tick is acked either way, so a rule skipped here never sees this price
+again, and a subsequent tick at 104 leaves a genuinely crossed threshold silently unfired.
+Continuing is not a one-word change, which is why it is recorded here: a failed
+`SaveChanges` rolls its transaction back but leaves everything it tried to write still
+tracked — the rule `Modified` against a `RowVersion` the database no longer has, and the
+`OutboxMessage` `Added`. The next rule's save would replay both, failing again on the rule
+and, worse, inserting an event announcing an alert this instance did not win. The conflicted
+entries are therefore detached and the enqueued event discarded before the loop moves on.
+
 The tick is acked after the transaction commits. If the process dies between the two, the tick
 is redelivered and the rule is no longer `Active`, so nothing happens twice.
 
@@ -186,6 +215,29 @@ opposite answers to opposite problems:
 | Duplicate `MessageId` | Ack. Already delivered; this is success, not an error |
 | Transient — database unreachable, connection reset | Nack **with** requeue. The alert is real and the fault is ours; dead-lettering it would lose exactly what the outbox exists to protect |
 | Anything else — malformed payload, unknown message type, a `UserId` that does not exist | Nack **without** requeue → DLX → `api.notifications.dlq` |
+
+*Amended 2026-08-04, during implementation.* As originally written, a SignalR push failure
+(step 2 above) fell through to this same classification like any other exception, and
+"anything else" dead-letters. That contradicted the paragraph immediately above the table: a
+push failure happens after the `Notification` row is already committed, so treating it as a
+permanent failure dead-lettered an alert the outbox had already delivered safely — exactly
+what "the row is the guarantee; real-time is the optimisation" says must not happen. The push
+now sits outside this table entirely: it has its own catch, scoped to only the
+`Clients.User(...).SendAsync(...)` call, that logs and still acks. This table classifies
+persistence failures only.
+
+*Amended 2026-08-04, during implementation.* This table is a classification of *faults*, and
+the first implementation classified on *exception type* instead — every `DbUpdateException`
+that was not a duplicate-key violation went to requeue. That put the table's own worked
+example on the wrong path: `Notifications.UserId` carries a foreign key, so "a `UserId` that
+does not exist" raises SQL 547, a `DbUpdateException` like any other, and requeued at
+SQL-round-trip speed forever without ever reaching the dead-letter queue this table sends it
+to. Classification is now by SQL Server error number — 547 (foreign key or check
+constraint), 515 (null into a non-nullable column), 245 and 8114 (unconvertible value), 2628
+and 8152 (value too long) — in the same style as the 2601/2627 duplicate check one row
+above. It is an allow-list of permanent faults rather than a deny-list of transient ones,
+because the asymmetry is real: requeueing a permanent fault wastes cycles, while
+dead-lettering a transient one loses a user's alert.
 
 Requeue-on-transient can loop if the database stays down, which is deliberate: the message
 keeps its place until the database returns. What it must never do is dead-letter a valid
@@ -290,8 +342,43 @@ The broker being down must not take the API down with it. Concretely:
 
 - Both applications retry the initial connection with exponential backoff and jitter rather
   than crash-looping, and use `AutomaticRecoveryEnabled` for reconnection thereafter.
+
+  *Amended 2026-08-04, during implementation.* "Use `AutomaticRecoveryEnabled` for
+  reconnection thereafter" turned out to be doing two jobs it cannot do alone, and the gap
+  between them was a silent total failure of the pipeline. **First**, `RabbitMqConnection`
+  must be able to tell a recovering connection from a finished one.
+  `AutorecoveringConnection.IsOpen` delegates straight to the inner connection, so it reads
+  false for the entire recovery window — `NetworkRecoveryInterval` per attempt, retried
+  indefinitely — and code that read `IsOpen == false` as "this connection is dead" disposed
+  a connection that was about to come back, destroying every channel and consumer riding on
+  it. The predicate now mirrors the client's own `ShouldTriggerConnectionRecovery`:
+  peer-initiated shutdowns recover unless access was refused, library-initiated ones (an EOF
+  from a lost node) recover unless the AppDomain is unloading, and anything else — notably
+  an application-initiated close — is terminal, which is the only case where replacing the
+  connection is correct. **Second**, neither consumer may depend on that connection object
+  surviving at all. `AlertTriggeredConsumer` and `PriceConsumer` now share a
+  `RabbitMqConsumerService` base class whose `ExecuteAsync` is a supervision loop: it
+  subscribes, parks until its channel shuts down, disposes that channel and subscribes
+  again, backs off exponentially while the broker is unreachable, and catches everything so
+  that no exception can escape into
+  `BackgroundServiceExceptionBehavior.StopHost` and take the host down over a broker that is
+  merely restarting. Both properties matter because the failure they prevent is invisible: a
+  consumer that lost its channel stayed alive, logged nothing, kept `/health` answering
+  `ok`, and let alerts accumulate durably in `api.notifications` while nobody read them.
 - `RabbitMqTickSink` failures are logged and dropped. Ticks are lossy by design and SignalR
   delivery must not degrade because the broker is unwell.
+
+  *Amended 2026-08-04, during implementation.* As originally designed, `RabbitMqTickSink`
+  awaited connection establishment inline before publishing. That made the claim above
+  false: `TickBroadcaster` awaits its sinks sequentially on `PriceTickChannel`'s single
+  reader, and `RabbitMqConnection` retries an unreachable broker with unbounded exponential
+  backoff, so the first tick to hit a down broker wedged the reader indefinitely — freezing
+  SignalR delivery to every connected client for as long as the broker stayed down. The sink
+  now reads its cached channel and publishes only if one is already open; otherwise it drops
+  the tick immediately and triggers a single-flight background reconnect it does not wait
+  on. This makes the claim above true rather than aspirational. See ADR-009 for the general
+  lesson: a shared single-reader fan-out is only as fast as its slowest sink, so every sink
+  on it must be non-blocking by construction, not just well-behaved in the common case.
 - Alert-rule CRUD keeps working — it is a database operation and touches no broker.
 - Triggered alerts accumulate as undispatched outbox rows and flush when the broker returns.
   **This is the mechanism behind the README's zero-lost-alerts claim, and 4b's chaos test is
@@ -312,10 +399,35 @@ The broker being down must not take the API down with it. Concretely:
 `Testcontainers.RabbitMq` is added; the backend CI job needs no workflow change, since
 Testcontainers starts its own containers and the runner already has Docker.
 
+*Amended 2026-08-04, during implementation.* This section did not say whether each test
+class gets a clean fixture. It does not: `RabbitMqTopologyTests`, `AlertEvaluationTests`,
+`OutboxDispatchTests` and `AlertPipelineTests` all share one SQL Server container and one
+RabbitMQ container across the whole `MessagingCollection`, never reset between classes —
+the same pattern the rest of the integration suite already uses for `SqlServerFixture`.
+Undispatched outbox rows and dead-lettered messages from one test class are still there when
+the next one runs. A test that asserts on queue *position* (which message `BasicGetAsync`
+returns next) or a raw *count* of pending rows is therefore not reliable. The fix, applied
+where it mattered (`OutboxDispatchTests`, `AlertPipelineTests`), is to be deterministic about
+the test's own data rather than the shared resource's overall state: drain and search for a
+self-generated `MessageId` or correlation-id marker instead of trusting what comes back
+first, and leave row/message counts as lower-bound (`>=`) assertions where residue from
+other classes in the same run is expected.
+
 ### Deliberately not tested
 
 - **No chaos test.** Killing the broker mid-flow is slice 4b, and it is the test that turns
   "the outbox exists" into "no alert was lost".
+
+  *Amended 2026-08-04, during implementation.* Narrowed, because this slice ended up needing
+  part of it. `BrokerOutageTests` severs and restores the TCP link to the shared broker
+  through a loopback proxy, and asserts two things: that `RabbitMqConnection` hands back a
+  recovering connection rather than disposing it, and that a consumer that lost its channel
+  resubscribes and delivers a message published during the outage. That is a targeted
+  liveness test for the consumers, written because the defect it pins down was invisible
+  without one — nothing threw, nothing logged, `/health` stayed `ok`. It is not the chaos
+  test: 4b still owns the end-to-end "create a rule, cross it, kill the broker, lose
+  nothing" proof over the whole pipeline, which is a different claim about a different set
+  of components.
 - **No load test on evaluation throughput.** The random walk emits four ticks a second.
   Measurement belongs to slice 12, against something worth measuring.
 - **No SignalR transport test** — unchanged from slices 1 and 2. That tests Microsoft's library.

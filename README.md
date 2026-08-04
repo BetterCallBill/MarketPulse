@@ -45,36 +45,49 @@ The product domain (ASX ETFs: IVV, NDQ, VHY, FANG) comes from genuine personal i
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                          CloudFront + S3                            │
-│                    React 18 / TypeScript SPA                        │
+│                           CloudFront + S3                           │
+│                      React 18 / TypeScript SPA                      │
 └───────────────┬─────────────────────────────┬───────────────────────┘
                 │ HTTPS (REST /api/v1)        │ WebSocket (SignalR)
                 ▼                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     ASP.NET Core 10 — ECS Fargate                   │
+│                    ASP.NET Core 10 — ECS Fargate                    │
 │  ┌──────────────────────┐   ┌──────────────────────┐                │
 │  │  Portfolio Module    │   │  Market Data Module  │  Modular       │
 │  │  (Controllers, EF)   │   │  (Minimal APIs,      │  Monolith      │
 │  │                      │   │   Ingestion Service) │                │
 │  └──────────┬───────────┘   └──────────┬───────────┘                │
-│             │        Outbox            │ publish PriceTick          │
-└─────────────┼───────────────────────────┼──────────────────────────┘
-              ▼                           ▼
-     ┌────────────────┐          ┌─────────────────┐
-     │  RDS SQL Server│          │    RabbitMQ     │
-     └────────────────┘          └────────┬────────┘
-                                          │ consume (idempotent)
-                                          ▼
-                              ┌───────────────────────┐
-                              │   Alerts Microservice │
-                              │   (.NET 10 Worker)    │
-                              └───────────────────────┘
+│             │                          │ publish PriceTick,         │
+│             │                          │ straight to the broker —   │
+│             │                          │ no outbox on this path     │
+│             │                ┌─────────┴────────────┐               │
+│             │                │   NotificationHub    │               │
+│             │                │   (per-user push)    │               │
+│             │                └─────────▲────────────┘               │
+└─────────────┼──────────────────────────┼────────────────────────────┘
+              ▼                          │ consume AlertTriggered
+     ┌────────────────┐          ┌───────┴────────────┐
+     │  RDS SQL Server│          │      RabbitMQ      │
+     └────────▲───────┘          └────────┬──────▲────┘
+              │                           │      │
+              │ read/write rules,  consume│      │ publish AlertTriggered
+              │ write Outbox row PriceTick│      │ (Outbox dispatcher,
+              │ — one transaction         ▼      │  broker-confirmed)
+              │                 ┌────────────────┴─────┐
+              └─────────────────┤ Alerts Microservice  │
+                                │   (.NET 10 Worker)   │
+                                └──────────────────────┘
 
      ┌────────────────┐          ┌─────────────────────────┐
      │ Lambda (EOD    │          │ OpenTelemetry → Datadog │
      │ price snapshot)│          │ Serilog structured logs │
      └────────────────┘          └─────────────────────────┘
 ```
+
+The outbox sits between the Alerts worker and the notification path, not on price ticks: a
+tick is superseded a second later, so writing every one durably would buy nothing. The real
+atomicity problem is "rule marked fired" and "notification event published" not diverging —
+see [ADR-009](docs/adr/009-messaging-architecture.md).
 
 **The core architectural decision:** a **modular monolith (Portfolio + Market Data) plus one extracted Alerts microservice**. Alert evaluation is the one workload whose load is driven by how many thresholds users set rather than by how many people are looking at the app, so it scales independently; everything else stays in one deployable. Trade-offs of both approaches are documented in [ADR-001](docs/adr/001-modular-monolith-plus-one-service.md).
 
@@ -116,8 +129,11 @@ packages/emitter        # Standalone ES module event emitter
 ### Messaging — eventual consistency done properly
 
 - **Outbox pattern** on the publisher: domain events written transactionally with state, relayed to RabbitMQ by a background dispatcher
-- **Idempotent consumers:** the Alerts service dedupes on message ID; redelivery is safe
-- **Resilience:** Polly retry + circuit breaker around the external market data feed; chaos test kills RabbitMQ mid-flow and verifies recovery
+- **Idempotent consumers:** the API dedupes `AlertTriggered` on message ID — a unique index on
+  `Notifications.MessageId`, enforced by the database rather than a read-then-write that would
+  race itself; redelivery is safe. The Alerts worker needs no message-ID dedupe of its own: a
+  redelivered tick finds the rule no longer `Active` and does nothing
+- **Resilience:** Polly retry + circuit breaker around the external market data feed (**slice 6, not yet built** — ticks still come from `FakeTickService`) and a chaos test that kills RabbitMQ mid-flow and verifies recovery (**slice 4b, not yet built**)
 
 ---
 
@@ -267,7 +283,7 @@ packages/emitter        # Standalone ES module event emitter
 - **Outbox pattern:** domain events persisted transactionally, relayed by a background dispatcher
 - **Idempotent consumers:** dedupe on message ID; redelivery-safe by design
 - **Eventual consistency:** alert notification flow documented end-to-end
-- **Resilience:** Polly retry with jitter + circuit breaker around the external feed; a **chaos test** kills RabbitMQ mid-flow and asserts recovery
+- **Resilience:** Polly retry with jitter + circuit breaker around the external feed; a **chaos test** kills RabbitMQ mid-flow and asserts recovery — **slice 4b, not yet built.** This slice built the outbox and the dead-letter path that make recovery possible; the chaos test is what proves it
 
 #### 12. Cloud & DevOps
 
@@ -357,14 +373,19 @@ marketpulse-pro/
 
 ## Getting started
 
-### Slices 1–2 — what actually runs today
+### What actually runs today
 
-These four commands are the real, runnable path on this branch. The "Local development"
-block further down describes the target shape for later phases (an Alerts worker,
-RabbitMQ) — none of that exists yet, so don't run it expecting it to work.
+These commands are the real, runnable path on this branch, through slice 4a — the alerts
+pipeline's backend. `docker compose up -d` now starts SQL Server **and** RabbitMQ, and the
+Alerts worker is a real, separately-run project that evaluates rules and dispatches the
+outbox. What is still missing is the alerts and notifications **UI**: there is no page in
+the dashboard to create a rule or see a notification yet, because that is slice 4b.
+Exercising the pipeline end to end today means calling the API directly
+(`POST /api/v1/alerts`) and connecting a SignalR client to `/hubs/notifications`, not
+clicking through the dashboard.
 
 ```bash
-# 1. Start infrastructure (SQL Server)
+# 1. Start infrastructure (SQL Server + RabbitMQ)
 docker compose up -d
 
 # 2. Apply database migrations (creates the schema and seeds reference tickers +
@@ -373,10 +394,13 @@ docker compose up -d
 dotnet tool restore
 dotnet ef database update --project src/MarketPulse.Infrastructure
 
-# 3. Start the API (serves REST + the SignalR hub) — http://localhost:5100
+# 3. Start the API (serves REST + the SignalR hubs) — http://localhost:5100
 dotnet run --project src/MarketPulse.Api
 
-# 4. Start the dashboard — http://localhost:5173
+# 4. Start the Alerts worker (evaluates rules against ticks, dispatches the outbox)
+dotnet run --project src/MarketPulse.Alerts
+
+# 5. Start the dashboard — http://localhost:5173
 pnpm install && pnpm --filter @marketpulse/dashboard dev
 ```
 
@@ -429,25 +453,6 @@ store along with the seeded dev account.
 ### Prerequisites
 
 - .NET 10 SDK · Node.js 20+ · pnpm · Docker Desktop
-
-### Local development (aspirational — describes later phases, not yet runnable)
-
-```bash
-# 1. Start infrastructure (SQL Server + RabbitMQ)
-docker compose up -d
-
-# 2. Run database migrations
-dotnet ef database update --project src/MarketPulse.Infrastructure
-
-# 3. Start the API (serves SignalR hub + REST)
-dotnet run --project src/MarketPulse.Api
-
-# 4. Start the Alerts worker
-dotnet run --project src/MarketPulse.Alerts
-
-# 5. Start the frontend
-pnpm install && pnpm --filter dashboard dev
-```
 
 ### Running tests
 
