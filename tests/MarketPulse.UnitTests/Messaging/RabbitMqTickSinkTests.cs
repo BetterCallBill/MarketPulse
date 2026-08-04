@@ -3,6 +3,7 @@ using MarketPulse.Domain.ValueObjects;
 using MarketPulse.Infrastructure.Messaging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using RabbitMQ.Client;
 
 namespace MarketPulse.UnitTests.Messaging;
 
@@ -44,28 +45,62 @@ public class RabbitMqTickSinkTests
         Assert.Same(sendTask, completed);
     }
 
-    [Fact]
-    public async Task A_second_tick_while_a_connection_attempt_is_in_flight_also_returns_promptly()
+    /// <summary>
+    /// A hand-rolled counting spy for the one capability <c>RabbitMqTickSink</c> calls on
+    /// <c>RabbitMqConnection</c>. <c>RabbitMqConnection</c> is sealed and has no interface
+    /// (deliberately — see its own docs), so it cannot be substituted directly; the sink's
+    /// internal test-only constructor takes this capability as a plain delegate instead,
+    /// which a hand-rolled spy can count without any mocking framework. The returned task
+    /// never completes on its own — the test controls exactly when (if ever) an "attempt"
+    /// finishes by completing <see cref="Attempts"/> itself.
+    /// </summary>
+    private sealed class CountingChannelFactory
     {
-        // Single-flight: the second tick must not start a competing attempt, and must not
-        // wait for the one already running — it should return just as fast as the first.
-        var options = Options.Create(UnreachableBroker);
+        private int _calls;
 
-        await using var connection = new RabbitMqConnection(
-            options, NullLogger<RabbitMqConnection>.Instance);
+        public int Calls => Volatile.Read(ref _calls);
+
+        public TaskCompletionSource<IChannel> Attempts { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<IChannel> CreateChannelAsync(bool publisherConfirms, CancellationToken ct)
+        {
+            Interlocked.Increment(ref _calls);
+            return Attempts.Task;
+        }
+    }
+
+    [Fact]
+    public async Task Five_ticks_arriving_while_one_connection_attempt_is_in_flight_trigger_exactly_one_attempt()
+    {
+        // This is the actual single-flight guarantee: TriggerConnect's
+        // "lock (_connectGate) { if (_connectTask is { IsCompleted: false }) return; ... }"
+        // guard must stop every tick after the first from starting a competing attempt.
+        // Asserting only that SendAsync returns quickly (as the prior version of this test
+        // did) does not exercise that guard at all — SendAsync never awaits TriggerConnect's
+        // result on any path, so it would return just as fast with the guard deleted.
+        var factory = new CountingChannelFactory();
 
         await using var sink = new RabbitMqTickSink(
-            connection, options, NullLogger<RabbitMqTickSink>.Instance);
+            factory.CreateChannelAsync,
+            Options.Create(UnreachableBroker),
+            NullLogger<RabbitMqTickSink>.Instance);
 
-        var first = new PriceTick("IVV", 50m, DateTimeOffset.UnixEpoch);
-        var second = new PriceTick("NDQ", 60m, DateTimeOffset.UnixEpoch);
+        var tick = new PriceTick("IVV", 50m, DateTimeOffset.UnixEpoch);
 
-        await sink.SendAsync(first, CancellationToken.None);
+        // factory.Attempts never completes during this loop, so every one of these five
+        // ticks arrives while the first (and, if the guard works, only) attempt is still
+        // running.
+        for (var i = 0; i < 5; i++)
+        {
+            await sink.SendAsync(tick, CancellationToken.None);
+        }
 
-        var sendTask = sink.SendAsync(second, CancellationToken.None);
-        var completed = await Task.WhenAny(sendTask, Task.Delay(TimeSpan.FromMilliseconds(500)));
+        Assert.Equal(1, factory.Calls);
 
-        Assert.Same(sendTask, completed);
+        // Let the in-flight attempt unwind cleanly rather than leaving it stuck for the
+        // rest of the test run.
+        factory.Attempts.TrySetException(new InvalidOperationException("test teardown"));
     }
 
     [Fact]

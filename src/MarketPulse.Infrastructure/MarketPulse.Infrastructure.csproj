@@ -21,4 +21,13 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!--
+    Exposes RabbitMqTickSink's internal test-only constructor overload, which lets
+    RabbitMqTickSinkTests substitute a counting spy for RabbitMqConnection.CreateChannelAsync
+    to assert single-flight behaviour. RabbitMqConnection itself stays sealed and unchanged.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="MarketPulse.UnitTests" />
+  </ItemGroup>
+
 </Project>

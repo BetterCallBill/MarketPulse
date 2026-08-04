@@ -24,18 +24,44 @@ namespace MarketPulse.Infrastructure.Messaging;
 /// to (re)establish a channel is kicked off. Nobody waits for that attempt; it self-heals the
 /// sink for the ticks that follow.
 /// </summary>
-public sealed class RabbitMqTickSink(
-    RabbitMqConnection connection,
-    IOptions<RabbitMqOptions> options,
-    ILogger<RabbitMqTickSink> logger) : ITickSink, IAsyncDisposable
+public sealed class RabbitMqTickSink : ITickSink, IAsyncDisposable
 {
-    private readonly RabbitMqOptions _options = options.Value;
+    private readonly Func<bool, CancellationToken, Task<IChannel>> _createChannel;
+    private readonly RabbitMqOptions _options;
+    private readonly ILogger<RabbitMqTickSink> _logger;
     private readonly CancellationTokenSource _shutdownCts = new();
     private readonly object _connectGate = new();
 
     private IChannel? _channel;
     private Task? _connectTask;
     private volatile bool _disposed;
+
+    public RabbitMqTickSink(
+        RabbitMqConnection connection,
+        IOptions<RabbitMqOptions> options,
+        ILogger<RabbitMqTickSink> logger)
+        : this(connection.CreateChannelAsync, options, logger)
+    {
+    }
+
+    /// <summary>
+    /// Test-only seam. <see cref="RabbitMqConnection"/> is sealed with no interface (by
+    /// design — see its own docs), so a counting or failing spy cannot substitute for it
+    /// directly. This overload lets a test substitute just the one capability this sink
+    /// actually calls — <c>CreateChannelAsync</c> — to assert single-flight behaviour
+    /// (exactly one attempt per outage, however many ticks arrive while it is in flight)
+    /// without changing <see cref="RabbitMqConnection"/> or the production constructor
+    /// above, which callers through DI still use unchanged.
+    /// </summary>
+    internal RabbitMqTickSink(
+        Func<bool, CancellationToken, Task<IChannel>> createChannel,
+        IOptions<RabbitMqOptions> options,
+        ILogger<RabbitMqTickSink> logger)
+    {
+        _createChannel = createChannel;
+        _options = options.Value;
+        _logger = logger;
+    }
 
     public Task SendAsync(PriceTick tick, CancellationToken ct)
     {
@@ -106,8 +132,7 @@ public sealed class RabbitMqTickSink(
     {
         try
         {
-            var channel = await connection.CreateChannelAsync(
-                publisherConfirms: false, _shutdownCts.Token);
+            var channel = await _createChannel(false, _shutdownCts.Token);
             await RabbitMqTopology.DeclareAsync(channel, _options, _shutdownCts.Token);
 
             if (_disposed)
@@ -131,7 +156,7 @@ public sealed class RabbitMqTickSink(
             // unhandled exception here would otherwise become an unobserved task exception.
             // The sink is not left wedged — the next tick that finds no open channel calls
             // TriggerConnect again and starts a fresh attempt.
-            logger.LogWarning(
+            _logger.LogWarning(
                 ex, "RabbitMqTickSink failed to establish a channel; will retry on the next tick.");
         }
     }
