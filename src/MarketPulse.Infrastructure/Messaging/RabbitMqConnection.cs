@@ -16,26 +16,58 @@ public sealed class RabbitMqConnection(
     ILogger<RabbitMqConnection> logger) : IAsyncDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly CancellationTokenSource _shutdownCts = new();
     private readonly RabbitMqOptions _options = options.Value;
     private IConnection? _connection;
+    private volatile bool _disposed;
 
     public async Task<IConnection> GetAsync(CancellationToken ct)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         if (_connection is { IsOpen: true })
         {
             return _connection;
         }
 
-        await _gate.WaitAsync(ct);
+        // Linked so a shutdown mid-backoff cancels this attempt instead of leaving
+        // DisposeAsync waiting on the gate for the remainder of the retry delay.
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
+
+        await _gate.WaitAsync(linked.Token);
 
         try
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
             if (_connection is { IsOpen: true })
             {
                 return _connection;
             }
 
-            _connection = await OpenWithBackoffAsync(ct);
+            if (_connection is not null)
+            {
+                // Not the automatic-recovery path — that keeps the same IConnection alive
+                // in place. This is a connection that closed for good (or never opened
+                // cleanly), so the old object and any channels it still owns must be
+                // released before it is replaced. A connection that died abnormally may
+                // itself throw on dispose; that must not stop us from opening its
+                // replacement.
+                try
+                {
+                    await _connection.DisposeAsync();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to dispose the stale RabbitMQ connection.");
+                }
+                finally
+                {
+                    _connection = null;
+                }
+            }
+
+            _connection = await OpenWithBackoffAsync(linked.Token);
             return _connection;
         }
         finally
@@ -99,11 +131,42 @@ public sealed class RabbitMqConnection(
 
     public async ValueTask DisposeAsync()
     {
-        if (_connection is not null)
+        if (_disposed)
         {
-            await _connection.DisposeAsync();
+            return;
+        }
+
+        _disposed = true;
+
+        // Interrupt any in-flight connection attempt — including one sitting in the retry
+        // delay — so acquiring the gate below cannot block for the rest of that backoff.
+        await _shutdownCts.CancelAsync();
+
+        await _gate.WaitAsync();
+
+        try
+        {
+            if (_connection is not null)
+            {
+                try
+                {
+                    await _connection.DisposeAsync();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(
+                        ex, "Failed to dispose the RabbitMQ connection during shutdown.");
+                }
+
+                _connection = null;
+            }
+        }
+        finally
+        {
+            _gate.Release();
         }
 
         _gate.Dispose();
+        _shutdownCts.Dispose();
     }
 }
