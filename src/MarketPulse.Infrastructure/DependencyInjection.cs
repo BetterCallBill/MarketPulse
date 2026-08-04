@@ -10,16 +10,28 @@ namespace MarketPulse.Infrastructure;
 
 public static class InfrastructureServiceCollectionExtensions
 {
+    /// <summary>
+    /// Everything both hosts need: the shared database and the repositories over it. The
+    /// worker takes this; the API takes this plus the tick source and the auth services.
+    /// </summary>
+    public static IServiceCollection AddPersistence(
+        this IServiceCollection services, string connectionString)
+    {
+        services.AddDbContext<MarketPulseDbContext>(o => o.UseSqlServer(connectionString));
+        services.AddScoped<IWatchlistRepository, WatchlistRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IAlertRuleRepository, AlertRuleRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IOutbox, Outbox>();
+        return services;
+    }
+
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
         string connectionString)
     {
-        services.AddDbContext<MarketPulseDbContext>(o => o.UseSqlServer(connectionString));
-        services.AddScoped<IWatchlistRepository, WatchlistRepository>();
-        services.AddScoped<IAlertRuleRepository, AlertRuleRepository>();
-        services.AddScoped<INotificationRepository, NotificationRepository>();
-        services.AddScoped<IUserRepository, UserRepository>();
-        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddPersistence(connectionString);
         services.AddSingleton<IPasswordHasher, PasswordHasherAdapter>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<PriceTickChannel>();

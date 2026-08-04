@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MarketPulse.Api\MarketPulse.Api.csproj" />
+    <ProjectReference Include="..\..\src\MarketPulse.Alerts\MarketPulse.Alerts.csproj" />
   </ItemGroup>
 
 </Project>

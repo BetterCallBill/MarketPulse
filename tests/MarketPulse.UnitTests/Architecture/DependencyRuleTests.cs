@@ -71,4 +71,22 @@ public class DependencyRuleTests
             .Where(name => ForbiddenFrameworks.Any(
                 f => name.StartsWith(f, StringComparison.Ordinal)))
             .ToArray();
+
+    /// <summary>
+    /// The worker is a second deployable, not a second web host. It shares the database and
+    /// the domain with the API and reaches the outside world only through the broker; a web
+    /// framework reference would mean someone had started building an HTTP surface on it.
+    /// </summary>
+    [Fact]
+    public void The_alerts_worker_references_no_web_framework()
+    {
+        var worker = typeof(MarketPulse.Alerts.AlertEvaluator).Assembly;
+
+        var forbidden = worker.GetReferencedAssemblies()
+            .Select(a => a.Name!)
+            .Where(name => name.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.Empty(forbidden);
+    }
 }
