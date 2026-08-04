@@ -5,6 +5,7 @@ import { LoginScreen } from './features/auth/LoginScreen';
 import { ProtectedRoute } from './features/auth/ProtectedRoute';
 import { RegisterScreen } from './features/auth/RegisterScreen';
 import { SignOutButton } from './features/auth/SignOutButton';
+import { NotificationBell } from './features/notifications/NotificationBell';
 import { WatchlistScreen } from './features/watchlist/WatchlistScreen';
 
 const queryClient = new QueryClient();
@@ -16,7 +17,10 @@ export function App() {
         <div className={styles.page}>
           <header className={styles.header}>
             <h1 className={styles.wordmark}>MarketPulse Pro</h1>
-            <SignOutButton />
+            <div className={styles.controls}>
+              <NotificationBell />
+              <SignOutButton />
+            </div>
           </header>
           <main className={styles.main}>
             <Routes>
