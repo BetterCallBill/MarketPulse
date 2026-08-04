@@ -68,7 +68,8 @@ Alert rule CRUD, RabbitMQ, the Alerts worker, transactional outbox, notification
 per-user SignalR delivery. Proven end to end by integration tests against real SQL Server and
 real RabbitMQ. No dashboard changes.
 
-*Depends on:* nothing outstanding. *Spec:* to be written.
+*Depends on:* nothing outstanding.
+*Spec:* [2026-08-04-alerts-pipeline-backend-design.md](superpowers/specs/2026-08-04-alerts-pipeline-backend-design.md).
 
 ### 4b · Alerts UI and chaos test · phase 3
 Alert management and notifications panel built on `packages/ui`, unread state, Playwright
