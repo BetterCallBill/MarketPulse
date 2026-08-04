@@ -15,6 +15,7 @@ public static class InfrastructureServiceCollectionExtensions
     {
         services.AddDbContext<MarketPulseDbContext>(o => o.UseSqlServer(connectionString));
         services.AddScoped<IWatchlistRepository, WatchlistRepository>();
+        services.AddScoped<IAlertRuleRepository, AlertRuleRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddSingleton<IPasswordHasher, PasswordHasherAdapter>();
