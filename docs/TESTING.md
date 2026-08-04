@@ -7,9 +7,9 @@ Trophy-shaped: heaviest at integration, thin but present at unit and end-to-end.
 | Level | Tooling | Scope |
 |---|---|---|
 | Domain unit | xUnit | `Watchlist` invariants, `RandomWalk` bounds, `User` lockout, `RefreshToken` rotation, `AlertRule.Evaluate`'s truth table across both directions and boundary equality, its `MarkTriggered`/`Rearm` transitions and their illegal counterparts |
-| Application unit | xUnit + NSubstitute | Handler orchestration with a substituted repository, password policy, `TickBroadcaster`'s sink fan-out (including one sink throwing), `RabbitMqTickSink`'s non-blocking/single-flight reconnect behaviour, `OutboxDispatcher`'s publish-then-mark-dispatched ordering against a substituted `IEventPublisher` |
+| Application unit | xUnit + NSubstitute | Handler orchestration with a substituted repository, password policy, `TickBroadcaster`'s sink fan-out (including one sink throwing), `RabbitMqTickSink`'s non-blocking/single-flight reconnect behaviour and its disposal of the channel it replaces, `RabbitMqConsumerService`'s resubscribe-on-channel-shutdown loop (including that a subscribe failure never escapes `ExecuteAsync`), `RabbitMqEventPublisher`'s channel replacement and disposed-state guard, `AlertEvaluator`'s recovery from one rule losing a concurrency race, `OutboxDispatcher`'s publish-then-mark-dispatched ordering against a substituted `IEventPublisher` |
 | Architecture | xUnit + reflection | `Domain` references nothing outside the BCL; `MarketPulse.Application` references no messaging or web framework; `MarketPulse.Alerts` references no web framework; every CSRF-exempt hub declares no client-invokable methods |
-| Backend integration | WebApplicationFactory + Testcontainers | Real SQL Server **and RabbitMQ**, real migration, real HTTP; auth journeys, CSRF, rate limiting, cross-user isolation — now extended to alert rules and notifications; the alerts pipeline end to end (rule creation → crossing tick → outbox row → dispatch → idempotent consumption → per-user SignalR delivery), redelivery producing no duplicate, and a poison message reaching the dead-letter queue |
+| Backend integration | WebApplicationFactory + Testcontainers | Real SQL Server **and RabbitMQ**, real migration, real HTTP; auth journeys, CSRF, rate limiting, cross-user isolation — now extended to alert rules and notifications; the alerts pipeline end to end (rule creation → crossing tick → outbox row → dispatch → idempotent consumption → per-user SignalR delivery), redelivery producing no duplicate, a poison message reaching the dead-letter queue, an alert naming a non-existent user reaching it too rather than requeueing forever, and — through a loopback proxy that severs and restores the link to the broker — a recovering connection surviving and a consumer resubscribing after an outage |
 | Frontend unit | Vitest | Stream reducer, zod schemas, `useNow`/`usePriceStream`/`PriceCell` hooks (stale-clock, initial-connect-failure), api-client CSRF and single-flight refresh |
 | Frontend integration | Vitest + RTL + MSW | Watchlist screen render, 409-duplicate error path, login error paths, protected-route redirect |
 | End-to-end | Playwright + Chromium | Three journeys through the real API and the production dashboard build |
@@ -72,9 +72,13 @@ the backend and frontend jobs, and uploads a report artifact on failure.
   cookies over plain HTTP, so turning it on would break every integration test rather than
   strengthen it. The attribute is instead covered by `AuthCookiesTests` as a pure function
   over the environment name.
-- **No chaos test.** Killing the broker mid-flow and proving recovery is slice 4b's job —
-  it is the test that turns "the outbox exists" into "no alert was lost". This slice proves
-  the outbox and the dead-letter path exist; it does not yet prove they survive an outage.
+- **No chaos test.** Killing the broker mid-flow and proving *no alert was lost* end to end
+  is slice 4b's job — it is the test that turns "the outbox exists" into "no alert was
+  lost". This slice proves the outbox and the dead-letter path exist, and `BrokerOutageTests`
+  additionally proves the two things whose failure was invisible without a test: that
+  `RabbitMqConnection` does not dispose a connection that is merely recovering, and that a
+  consumer resubscribes and delivers a message published while the link was down. That is a
+  liveness test for the consumers, not a zero-loss proof over the whole pipeline.
 - **No load test on evaluation throughput.** The random walk emits four ticks a second.
   Measuring throughput belongs to slice 12, against a feed and a rule count actually worth
   measuring.
@@ -86,8 +90,8 @@ the backend and frontend jobs, and uploads a report artifact on failure.
 
 ## Shared-fixture determinism
 
-`RabbitMqTopologyTests`, `AlertEvaluationTests`, `OutboxDispatchTests`, and
-`AlertPipelineTests` all share one SQL Server container and one RabbitMQ container across
+`RabbitMqTopologyTests`, `AlertEvaluationTests`, `OutboxDispatchTests`, `AlertPipelineTests`
+and `BrokerOutageTests` all share one SQL Server container and one RabbitMQ container across
 the whole `MessagingCollection`, never reset between test classes — the same pattern the
 rest of the integration suite already uses for `SqlServerFixture`. Two consequences that
 shaped how these tests were written, not just what they assert:
@@ -105,3 +109,11 @@ shaped how these tests were written, not just what they assert:
   drain-and-search rather than get-and-assert, and leave row/message *counts* as
   lower-bound (`>=`) assertions where the shared table is expected to carry residue from
   other classes in the same run.
+- **`BrokerOutageTests` is why the outage is simulated with a proxy rather than by stopping
+  the container.** Stopping the shared broker would take every other class's queues,
+  exchanges and pending messages with it. A loopback `TcpProxy` that the test cuts and
+  reconnects is indistinguishable from a broker restart to the client — an abruptly closed
+  socket is an EOF, which the client reports as a library-initiated shutdown and then
+  recovers from — while leaving the broker itself, and everyone else's state on it,
+  untouched. The queue it consumes is a randomly named one it declares itself, for the same
+  reason.

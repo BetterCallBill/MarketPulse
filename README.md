@@ -45,13 +45,13 @@ The product domain (ASX ETFs: IVV, NDQ, VHY, FANG) comes from genuine personal i
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                          CloudFront + S3                            │
-│                    React 18 / TypeScript SPA                        │
+│                           CloudFront + S3                           │
+│                      React 18 / TypeScript SPA                      │
 └───────────────┬─────────────────────────────┬───────────────────────┘
                 │ HTTPS (REST /api/v1)        │ WebSocket (SignalR)
                 ▼                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     ASP.NET Core 10 — ECS Fargate                   │
+│                    ASP.NET Core 10 — ECS Fargate                    │
 │  ┌──────────────────────┐   ┌──────────────────────┐                │
 │  │  Portfolio Module    │   │  Market Data Module  │  Modular       │
 │  │  (Controllers, EF)   │   │  (Minimal APIs,      │  Monolith      │
@@ -61,22 +61,22 @@ The product domain (ASX ETFs: IVV, NDQ, VHY, FANG) comes from genuine personal i
 │             │                          │ straight to the broker —   │
 │             │                          │ no outbox on this path     │
 │             │                ┌─────────┴────────────┐               │
-│             │                │   NotificationHub     │               │
-│             │                │   (per-user push)     │               │
-│             │                └───────────▲───────────┘               │
-└─────────────┼────────────────────────────┼───────────────────────────┘
-              ▼                            │ consume AlertTriggered
-     ┌────────────────┐          ┌─────────┴─────────┐
-     │  RDS SQL Server│          │     RabbitMQ       │
-     └───────▲────────┘          └────────┬──────▲────┘
-             │                            │      │
-             │ read/write rules,   consume│      │ publish AlertTriggered
-             │ write Outbox row  PriceTick│      │ (Outbox dispatcher,
-             │ — one transaction          ▼      │  broker-confirmed)
-             │                  ┌─────────────────┴────┐
-             └──────────────────┤  Alerts Microservice  │
-                                 │  (.NET 10 Worker)     │
-                                 └────────────────────────┘
+│             │                │   NotificationHub    │               │
+│             │                │   (per-user push)    │               │
+│             │                └─────────▲────────────┘               │
+└─────────────┼──────────────────────────┼────────────────────────────┘
+              ▼                          │ consume AlertTriggered
+     ┌────────────────┐          ┌───────┴────────────┐
+     │  RDS SQL Server│          │      RabbitMQ      │
+     └────────▲───────┘          └────────┬──────▲────┘
+              │                           │      │
+              │ read/write rules,  consume│      │ publish AlertTriggered
+              │ write Outbox row PriceTick│      │ (Outbox dispatcher,
+              │ — one transaction         ▼      │  broker-confirmed)
+              │                 ┌────────────────┴─────┐
+              └─────────────────┤ Alerts Microservice  │
+                                │   (.NET 10 Worker)   │
+                                └──────────────────────┘
 
      ┌────────────────┐          ┌─────────────────────────┐
      │ Lambda (EOD    │          │ OpenTelemetry → Datadog │
@@ -129,7 +129,10 @@ packages/emitter        # Standalone ES module event emitter
 ### Messaging — eventual consistency done properly
 
 - **Outbox pattern** on the publisher: domain events written transactionally with state, relayed to RabbitMQ by a background dispatcher
-- **Idempotent consumers:** the Alerts service dedupes on message ID; redelivery is safe
+- **Idempotent consumers:** the API dedupes `AlertTriggered` on message ID — a unique index on
+  `Notifications.MessageId`, enforced by the database rather than a read-then-write that would
+  race itself; redelivery is safe. The Alerts worker needs no message-ID dedupe of its own: a
+  redelivered tick finds the rule no longer `Active` and does nothing
 - **Resilience:** Polly retry + circuit breaker around the external market data feed (**slice 6, not yet built** — ticks still come from `FakeTickService`) and a chaos test that kills RabbitMQ mid-flow and verifies recovery (**slice 4b, not yet built**)
 
 ---

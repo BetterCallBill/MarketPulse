@@ -186,6 +186,58 @@ safety of the exemption is enforced, not just documented. The rule this slice es
 general: any push-only hub with no client-invokable methods may join the exempt list, on the
 same reasoning, guarded by the same test.
 
+**Automatic recovery reconnects a connection; it does not keep a consumer alive.** The
+biggest lesson of this slice, and one that cost a silent total failure of the delivery path
+to learn. `AutomaticRecoveryEnabled` invites you to treat reconnection as solved, and two
+separate pieces of code took that invitation. `RabbitMqConnection` treated
+`IsOpen == false` as "this connection is finished" and disposed it before opening a
+replacement — but `AutorecoveringConnection.IsOpen` delegates to the *inner* connection, so
+it reads false for the whole recovery window, and the disposal destroyed a connection that
+was about to come back along with every channel and consumer on it. Both `BackgroundService`
+consumers, meanwhile, subscribed once at startup and then parked on
+`Task.Delay(Timeout.Infinite)`, which made their liveness entirely a property of somebody
+else's connection object. The combination meant a single broker blip left the API consuming
+no alerts and the worker evaluating no ticks, permanently, with nothing thrown, nothing
+logged, and `/health` still answering `ok` — the worst shape a failure can take. Two changes,
+because they defend against different things. The connection now decides "recovering" versus
+"finished" with the same predicate the client uses internally
+(`ShouldTriggerConnectionRecovery`: peer-initiated unless access was refused,
+library-initiated unless the AppDomain is unloading, otherwise terminal) rather than by
+guessing from `IsOpen`. And both consumers now run on a shared `RabbitMqConsumerService`
+supervision loop that owns its own subscription: it resubscribes when its channel shuts
+down, disposes the spent channel first so that the client's topology recovery cannot leave a
+second copy of the consumer behind, backs off exponentially while the broker is unreachable,
+and catches everything so no exception can escape into
+`BackgroundServiceExceptionBehavior.StopHost`. The general rule this establishes: a library's
+recovery feature is a convenience on the happy path, never the thing a liveness guarantee is
+allowed to rest on. Anything that must keep running has to be able to rebuild itself.
+
+**A poison message is defined by its fault, not by its exception type.** The consumer's
+first cut classified persistence failures by exception type: `DbUpdateException` meant
+"transient, requeue" unless it was a duplicate-key violation. That is the wrong axis.
+`Notifications.UserId` carries a foreign key, so an alert naming a user who does not exist
+raises SQL 547 — a `DbUpdateException` like any other — and requeued at SQL-round-trip
+speed forever, hot-spinning the database, growing the log without bound, and never reaching
+the dead-letter queue the design put it on. Classification is now by SQL Server error
+number, an allow-list of faults that are permanent properties of the message (547, 515, 245,
+2628, 8114, 8152) with everything else falling through to requeue. The allow-list direction
+is deliberate: requeueing a permanent fault wastes cycles, whereas dead-lettering a
+transient one loses a user's alert, so the unknown case has to default to the recoverable
+side.
+
+**Losing an optimistic-concurrency race costs one rule, not one tick.** `RowVersion` was
+chosen so that two worker instances could race freely (decision 6), but the loser's recovery
+matters as much as the mechanism. One tick can cross several rules — "IVV above 100" and
+"IVV above 105" are both crossed at 106 — and `PriceConsumer` acks the tick whether or not
+every rule was evaluated, so a rule skipped because a sibling lost a race never sees that
+price again. Recovering properly is more than continuing the loop: a failed `SaveChanges`
+rolls back its transaction but leaves everything it attempted still tracked, so the
+conflicted rule and the `OutboxMessage` enqueued beside it have to be dropped from the unit
+of work explicitly, or the next rule's save replays both and publishes an alert this
+instance never won. This is what `IOutbox.Discard` exists for, and it is the one place the
+outbox pattern's "the caller's single `SaveChanges` is what makes it atomic" contract needs
+a way to say "not that one, after all."
+
 **The requeue loop has no bound until the observability slice adds one.** A transient
 failure (database unreachable, connection reset) on the consumer side is nacked with
 requeue, deliberately, so a redelivered alert is never lost to a database blip. If the
