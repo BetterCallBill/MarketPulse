@@ -29,10 +29,19 @@ public sealed class AlertRuleRepository(MarketPulseDbContext db) : IAlertRuleRep
               && r.Status == AlertRuleStatus.Active,
             ct);
 
+    /// <summary>
+    /// Ordered, though nothing about alert semantics depends on the order. Evaluation of one
+    /// tick can partially fail — a rule that loses an optimistic-concurrency race is skipped
+    /// and its siblings carry on — and "which rule was skipped" is only reproducible if the
+    /// order is. Sorting a handful of rows for one ticker costs nothing next to being able to
+    /// write a test for that path.
+    /// </summary>
     public async Task<IReadOnlyList<AlertRule>> GetActiveForTickerAsync(
         string ticker, CancellationToken ct) =>
         await db.AlertRules
             .Where(r => r.Ticker == ticker && r.Status == AlertRuleStatus.Active)
+            .OrderBy(r => r.CreatedUtc)
+            .ThenBy(r => r.Id)
             .ToListAsync(ct);
 
     public async Task AddAsync(AlertRule rule, CancellationToken ct) =>

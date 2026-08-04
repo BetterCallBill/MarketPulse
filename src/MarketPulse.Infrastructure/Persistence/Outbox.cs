@@ -1,5 +1,6 @@
 using MarketPulse.Application.Abstractions;
 using MarketPulse.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace MarketPulse.Infrastructure.Persistence;
 
@@ -18,4 +19,19 @@ public sealed class Outbox(MarketPulseDbContext db) : IOutbox
         CancellationToken ct) =>
         await db.OutboxMessages.AddAsync(
             OutboxMessage.Create(messageId, type, payload, correlationId, occurredUtc), ct);
+
+    public void Discard(Guid messageId)
+    {
+        var entry = db.ChangeTracker
+            .Entries<OutboxMessage>()
+            .FirstOrDefault(e => e.State == EntityState.Added && e.Entity.Id == messageId);
+
+        // Detached rather than removed: the row was never inserted, so there is nothing for a
+        // DELETE to target. Detaching is what stops the pending INSERT from being replayed by
+        // the next SaveChangesAsync on this context.
+        if (entry is not null)
+        {
+            entry.State = EntityState.Detached;
+        }
+    }
 }

@@ -59,14 +59,32 @@ public sealed class AlertEvaluator(
                 await rules.SaveChangesAsync(ct);
                 triggered++;
             }
-            catch (DbUpdateConcurrencyException)
+            catch (DbUpdateConcurrencyException ex)
             {
                 // Another worker instance got there first. Expected under horizontal
                 // scaling — not an error, and nothing was published.
                 logger.LogDebug(
                     "Rule {RuleId} was triggered concurrently; discarding this evaluation.",
                     rule.Id);
-                return triggered;
+
+                // Losing one race must cost exactly one rule, not the rest of the tick. The
+                // tick is acked either way, so a rule abandoned here never sees this price
+                // again: "IVV above 100" and "IVV above 105" both crossed by a tick at 106
+                // would leave the second one armed against a market that has already moved.
+                //
+                // A bare `continue` is not enough, and that is why this is not a one-word
+                // change. A failed SaveChanges rolls back the transaction but leaves every
+                // entity it tried to write still tracked — the rule Modified against a
+                // RowVersion the database no longer has, and the outbox row Added. The next
+                // rule's SaveChanges would replay both, failing again on the rule and, worse,
+                // inserting an event announcing an alert this instance did not win. Dropping
+                // both from the unit of work is what makes continuing safe.
+                foreach (var conflicted in ex.Entries)
+                {
+                    conflicted.State = EntityState.Detached;
+                }
+
+                outbox.Discard(messageId);
             }
         }
 
