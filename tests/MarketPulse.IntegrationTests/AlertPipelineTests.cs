@@ -5,6 +5,7 @@ using MarketPulse.Application.Configuration;
 using MarketPulse.Infrastructure.Messaging;
 using MarketPulse.Infrastructure.Messaging.Contracts;
 using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -84,6 +85,25 @@ public class AlertPipelineTests(SqlServerFixture sql, RabbitMqFixture rabbit)
         return null;
     }
 
+    private static async Task<string?> LoginAndGetAccessCookieAsync(
+        WebApplicationFactory<Program> factory, string email) =>
+        AuthenticatedClient.ReadCookie(
+            await factory.CreateClient().PostAsJsonAsync(
+                "/api/v1/auth/login",
+                new { Email = email, Password = AuthenticatedClient.ValidPassword }),
+            "mp_access");
+
+    private static HubConnection BuildNotificationConnection(
+        WebApplicationFactory<Program> factory, string? accessCookie) =>
+        new HubConnectionBuilder()
+            .WithUrl("http://localhost/hubs/notifications", o =>
+            {
+                o.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                o.Transports = HttpTransportType.LongPolling;
+                o.Headers["Cookie"] = $"mp_access={accessCookie}";
+            })
+            .Build();
+
     [Fact]
     public async Task An_alert_message_becomes_a_notification_and_reaches_only_its_owner()
     {
@@ -91,7 +111,8 @@ public class AlertPipelineTests(SqlServerFixture sql, RabbitMqFixture rabbit)
 
         var aliceEmail = AuthenticatedClient.NewEmail();
         var alice = await AuthenticatedClient.RegisterAsync(factory, aliceEmail);
-        var bob = await AuthenticatedClient.RegisterAsync(factory);
+        var bobEmail = AuthenticatedClient.NewEmail();
+        var bob = await AuthenticatedClient.RegisterAsync(factory, bobEmail);
 
         Guid aliceId;
         await using (var db = sql.CreateContext())
@@ -102,29 +123,26 @@ public class AlertPipelineTests(SqlServerFixture sql, RabbitMqFixture rabbit)
 
         var options = factory.Services.GetRequiredService<IOptions<RabbitMqOptions>>().Value;
 
-        var accessCookie = AuthenticatedClient.ReadCookie(
-            await factory.CreateClient().PostAsJsonAsync(
-                "/api/v1/auth/login",
-                new { Email = aliceEmail, Password = AuthenticatedClient.ValidPassword }),
-            "mp_access");
+        var aliceAccessCookie = await LoginAndGetAccessCookieAsync(factory, aliceEmail);
+        var bobAccessCookie = await LoginAndGetAccessCookieAsync(factory, bobEmail);
 
-        var connection = new HubConnectionBuilder()
-            .WithUrl("http://localhost/hubs/notifications", o =>
-            {
-                o.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
-                o.Transports = HttpTransportType.LongPolling;
-                o.Headers["Cookie"] = $"mp_access={accessCookie}";
-            })
-            .Build();
+        // Both Alice and Bob hold live hub connections. Clients.User(userId) claims to
+        // route to only the owning user's connections — the only way to actually exercise
+        // that routing, rather than the repository's WHERE UserId filter, is to have a
+        // second, real connection present that must NOT receive the push.
+        await using var aliceConnection = BuildNotificationConnection(factory, aliceAccessCookie);
+        await using var bobConnection = BuildNotificationConnection(factory, bobAccessCookie);
 
-        var pushed = new TaskCompletionSource<NotificationPush>(
+        var alicePushed = new TaskCompletionSource<NotificationPush>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var bobPushed = new TaskCompletionSource<NotificationPush>(
             TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // Clients.User(aliceId) already means only Alice's connection ever sees this push
-        // (per-user delivery is the property under test), so any "notification" event that
-        // reaches this connection is necessarily about her — no further filtering needed.
-        connection.On<NotificationPush>("notification", p => pushed.TrySetResult(p));
-        await connection.StartAsync();
+        aliceConnection.On<NotificationPush>("notification", p => alicePushed.TrySetResult(p));
+        bobConnection.On<NotificationPush>("notification", p => bobPushed.TrySetResult(p));
+
+        await aliceConnection.StartAsync();
+        await bobConnection.StartAsync();
 
         var message = new AlertTriggeredMessage(
             Guid.NewGuid(), Guid.NewGuid(), aliceId, "IVV",
@@ -132,11 +150,17 @@ public class AlertPipelineTests(SqlServerFixture sql, RabbitMqFixture rabbit)
 
         await PublishAlertAsync(rabbit, options, message);
 
-        var completed = await Task.WhenAny(pushed.Task, Task.Delay(TimeSpan.FromSeconds(15)));
-        await connection.DisposeAsync();
+        var completed = await Task.WhenAny(alicePushed.Task, Task.Delay(TimeSpan.FromSeconds(15)));
 
-        Assert.Same(pushed.Task, completed);
-        Assert.Equal("IVV", (await pushed.Task).Ticker);
+        Assert.Same(alicePushed.Task, completed);
+        Assert.Equal("IVV", (await alicePushed.Task).Ticker);
+
+        // Bob's connection gets a bounded grace period after Alice's push has already
+        // arrived. If Clients.User misrouted to every connection (e.g. Clients.All), Bob's
+        // copy would land at essentially the same moment as Alice's — this is not a race
+        // against a slow, correctly-scoped delivery.
+        var bobCompleted = await Task.WhenAny(bobPushed.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.NotSame(bobPushed.Task, bobCompleted);
 
         // Persisted, and visible over HTTP. Alice is a user this test just created, so her
         // notification list can only ever contain rows this test itself caused to be

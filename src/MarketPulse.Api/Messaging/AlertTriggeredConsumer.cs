@@ -78,7 +78,23 @@ public sealed class AlertTriggeredConsumer(
 
             if (notification is not null)
             {
-                await PushAsync(message, notification, ct);
+                try
+                {
+                    await PushAsync(message, notification, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // The row committed inside PersistAsync before we ever got here — that
+                    // row, not this push, is the durability guarantee ("the row is the
+                    // guarantee; real-time is the optimisation. If SignalR delivery fails or
+                    // the user is offline, the row is already persisted and the panel will
+                    // show it on next load"). A push failure must not undo an alert that
+                    // already succeeded by dead-lettering it. Only this call is inside this
+                    // catch — a PersistAsync failure must still reach the catches below.
+                    logger.LogWarning(
+                        ex, "Failed to push notification {NotificationId} over SignalR; " +
+                            "the row is already persisted.", notification.Id);
+                }
             }
 
             await channel.BasicAckAsync(ea.DeliveryTag, multiple: false, ct);

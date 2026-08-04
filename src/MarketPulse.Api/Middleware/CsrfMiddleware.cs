@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using MarketPulse.Api.Authentication;
+using MarketPulse.Api.Hubs;
 using MarketPulse.Domain.Exceptions;
 
 namespace MarketPulse.Api.Middleware;
@@ -35,10 +36,24 @@ public sealed class CsrfMiddleware(RequestDelegate next, ILogger<CsrfMiddleware>
     /// blanket exemption for anything under /hubs — a future hub with client-invokable
     /// methods needs its own path added here only after the same argument is re-checked
     /// against it.
+    ///
+    /// <see cref="ExemptPaths"/> uses <c>StartsWithSegments</c>, so exempting a hub's path
+    /// exempts its whole path family, including long-polling's client-to-server send
+    /// endpoint — that is only safe because the hub declares no client-invokable methods.
+    /// <see cref="ExemptHubs"/> is the single source of truth for which hub sits behind
+    /// which exempt path, precisely so <c>CsrfMiddlewareTests</c> can assert that invariant
+    /// by reflection instead of by comment.
     /// </summary>
+    internal static readonly (string Path, Type HubType)[] ExemptHubs =
+    [
+        ("/hubs/prices", typeof(PriceHub)),
+        ("/hubs/notifications", typeof(NotificationHub))
+    ];
+
     private static readonly string[] ExemptPaths =
     [
-        "/api/v1/auth/login", "/api/v1/auth/register", "/hubs/prices", "/hubs/notifications"
+        "/api/v1/auth/login", "/api/v1/auth/register",
+        .. ExemptHubs.Select(h => h.Path)
     ];
 
     public async Task InvokeAsync(HttpContext context)
