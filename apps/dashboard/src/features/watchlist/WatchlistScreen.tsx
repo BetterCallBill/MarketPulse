@@ -1,5 +1,6 @@
 import { Alert, Button, Panel, StatusDot, TextField, VisuallyHidden } from '@marketpulse/ui';
 import { useState, type FormEvent } from 'react';
+import { AlertCell } from '../alerts/AlertCell';
 import { PriceCell } from '../prices/PriceCell';
 import { isStale } from '../prices/streamReducer';
 import { useNow } from '../prices/useNow';
@@ -72,6 +73,7 @@ export function WatchlistScreen() {
                 <th scope="col" className={styles.numeric}>
                   Last
                 </th>
+                <th scope="col">Alert</th>
                 <th scope="col" className={styles.actions}>
                   <VisuallyHidden>Actions</VisuallyHidden>
                 </th>
@@ -93,6 +95,9 @@ export function WatchlistScreen() {
                         direction={entry?.direction ?? 'neutral'}
                         seq={entry?.seq ?? 0}
                       />
+                    </td>
+                    <td>
+                      <AlertCell ticker={item.ticker} />
                     </td>
                     <td className={styles.actions}>
                       <Button
