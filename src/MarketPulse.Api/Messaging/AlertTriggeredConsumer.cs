@@ -85,6 +85,17 @@ public sealed class AlertTriggeredConsumer(
 
             await channel.BasicAckAsync(ea.DeliveryTag, multiple: false, ct);
         }
+        catch (DbUpdateException ex) when (PermanentSqlError(ex) is { } number)
+        {
+            // The message itself is wrong, not the database. Requeueing it would replay the
+            // same rejection at SQL-round-trip speed forever, hot-spinning the database and
+            // growing the log without bound, and it would never reach the dead-letter queue
+            // the spec's classification table puts it on.
+            logger.LogError(
+                ex, "Permanent data fault persisting a notification (SQL error {SqlError}); " +
+                    "dead-lettering.", number);
+            await channel.BasicNackAsync(ea.DeliveryTag, multiple: false, requeue: false, ct);
+        }
         catch (DbUpdateException ex)
         {
             // The database is unreachable or otherwise unhappy — the alert is real and the
@@ -161,4 +172,35 @@ public sealed class AlertTriggeredConsumer(
     /// </summary>
     private static bool IsDuplicateMessageId(DbUpdateException ex) =>
         ex.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 };
+
+    /// <summary>
+    /// SQL Server error numbers that say the <em>message</em> is unacceptable, as opposed to
+    /// the database being unwell. Each one will be raised identically on every redelivery
+    /// until someone changes the message or the schema, so retrying is pure cost:
+    ///
+    /// <list type="bullet">
+    /// <item><description>515 — NULL into a non-nullable column.</description></item>
+    /// <item><description>547 — foreign key or check constraint. This is the one the spec
+    /// names explicitly: "a <c>UserId</c> that does not exist" belongs on the dead-letter
+    /// path, and <c>Notifications.UserId</c> carries an FK to <c>Users</c>.</description></item>
+    /// <item><description>245, 8114 — the value cannot be converted to the column's
+    /// type.</description></item>
+    /// <item><description>2628, 8152 — the value is too long for the column.</description></item>
+    /// </list>
+    ///
+    /// <para>Deliberately an allow-list of permanent faults rather than a deny-list of
+    /// transient ones, and deliberately keyed on the error number rather than the exception
+    /// type — classifying on type is what let a foreign-key violation, a
+    /// <c>DbUpdateException</c> like any other, requeue forever. Anything not listed falls
+    /// through to requeue, because the asymmetry matters: requeueing a permanent fault wastes
+    /// cycles, dead-lettering a transient one loses a user's alert.</para>
+    /// </summary>
+    /// <returns>The SQL error number if this fault is permanent, otherwise null.</returns>
+    private static int? PermanentSqlError(DbUpdateException ex) =>
+        ex.InnerException is Microsoft.Data.SqlClient.SqlException
+        {
+            Number: 515 or 547 or 245 or 8114 or 2628 or 8152
+        } sql
+            ? sql.Number
+            : null;
 }

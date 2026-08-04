@@ -262,6 +262,47 @@ public class AlertPipelineTests(SqlServerFixture sql, RabbitMqFixture rabbit)
         Assert.NotNull(deadLettered);
     }
 
+    [Fact]
+    public async Task An_alert_naming_a_user_that_does_not_exist_reaches_the_dead_letter_queue()
+    {
+        // The spec's classification table puts "a UserId that does not exist" on the
+        // dead-letter path. The consumer classified on exception *type* instead, and
+        // Notifications.UserId carries a foreign key — so this message raised SQL 547, a
+        // DbUpdateException like any other, and was nacked with requeue. It then came
+        // straight back, failed identically, and requeued again at SQL-round-trip speed
+        // forever: a hot loop against the database, an unbounded log, and a message that
+        // could never reach the DLQ it belonged in.
+        await using var factory = TestFactory.Create(sql, BrokerSettings());
+        _ = await AuthenticatedClient.RegisterAsync(factory);
+
+        var options = factory.Services.GetRequiredService<IOptions<RabbitMqOptions>>().Value;
+
+        await using var connection = await rabbit.ConnectAsync();
+        await using var channel = await connection.CreateChannelAsync();
+        await RabbitMqTopology.DeclareAsync(channel, options, CancellationToken.None);
+
+        var marker = Guid.NewGuid().ToString();
+
+        // Well-formed in every way except that nobody owns it. Parsing succeeds, so this
+        // cannot be mistaken for the malformed-payload case the test above covers.
+        var orphan = new AlertTriggeredMessage(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "IVV",
+            "Above", 50m, 51m, DateTimeOffset.UtcNow);
+
+        await channel.BasicPublishAsync(
+            exchange: options.AlertsExchange,
+            routingKey: RabbitMqTopology.AlertTriggeredRoutingKey,
+            mandatory: false,
+            basicProperties: new BasicProperties { Persistent = true, CorrelationId = marker },
+            body: JsonSerializer.SerializeToUtf8Bytes(orphan),
+            cancellationToken: CancellationToken.None);
+
+        var deadLettered = await FindOwnDeadLetterAsync(
+            channel, options.NotificationsDeadLetterQueue, marker);
+
+        Assert.NotNull(deadLettered);
+    }
+
     /// <summary>
     /// Drains the dead-letter queue one message at a time, discarding anything that is not
     /// ours, until our own marker turns up or the queue runs dry. Bounded so a genuine
