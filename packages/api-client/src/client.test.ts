@@ -122,4 +122,56 @@ describe('createApiClient', () => {
       correlationId: 'abc',
     });
   });
+
+  it('parses the alert list and hits the alerts endpoint', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        {
+          id: 'a1',
+          ticker: 'IVV',
+          direction: 'Above',
+          threshold: 60,
+          status: 'Active',
+          createdUtc: '2026-08-05T00:00:00+00:00',
+          triggeredUtc: null,
+          triggeredPrice: null,
+        },
+      ]),
+    );
+
+    const rules = await createApiClient(BASE).getAlerts();
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${BASE}/api/v1/alerts`);
+    expect(rules[0]?.status).toBe('Active');
+  });
+
+  it('re-arms by id with the CSRF header attached', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        id: 'a1',
+        ticker: 'IVV',
+        direction: 'Above',
+        threshold: 60,
+        status: 'Active',
+        createdUtc: '2026-08-05T00:00:00+00:00',
+        triggeredUtc: null,
+        triggeredPrice: null,
+      }),
+    );
+
+    await createApiClient(BASE).rearmAlert('a1');
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${BASE}/api/v1/alerts/a1/rearm`);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((init.headers as Record<string, string>)['X-CSRF-Token']).toBe('nonce-123');
+  });
+
+  it('marks a notification read against its own id', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await createApiClient(BASE).markNotificationRead('n1');
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${BASE}/api/v1/notifications/n1/read`);
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).method).toBe('POST');
+  });
 });

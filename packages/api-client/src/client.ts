@@ -1,7 +1,13 @@
+import { z } from 'zod';
 import {
+  alertRuleSchema,
+  notificationSchema,
   problemDetailsSchema,
   sessionSchema,
   watchlistSchema,
+  type AlertDirection,
+  type AlertRule,
+  type Notification,
   type Session,
   type Watchlist,
 } from './schemas';
@@ -146,6 +152,49 @@ export function createApiClient(baseUrl: string) {
         `/api/v1/watchlist/items/${encodeURIComponent(ticker)}`,
         { method: 'DELETE', signal },
         (d) => watchlistSchema.parse(d),
+      ),
+
+    getAlerts: (signal?: AbortSignal): Promise<AlertRule[]> =>
+      request('/api/v1/alerts', { method: 'GET', signal }, (d) =>
+        z.array(alertRuleSchema).parse(d),
+      ),
+
+    createAlert: (
+      ticker: string,
+      direction: AlertDirection,
+      threshold: number,
+      signal?: AbortSignal,
+    ): Promise<AlertRule> =>
+      request(
+        '/api/v1/alerts',
+        { method: 'POST', body: JSON.stringify({ ticker, direction, threshold }), signal },
+        (d) => alertRuleSchema.parse(d),
+      ),
+
+    deleteAlert: (id: string, signal?: AbortSignal): Promise<void> =>
+      request(
+        `/api/v1/alerts/${encodeURIComponent(id)}`,
+        { method: 'DELETE', signal },
+        () => undefined,
+      ),
+
+    rearmAlert: (id: string, signal?: AbortSignal): Promise<AlertRule> =>
+      request(
+        `/api/v1/alerts/${encodeURIComponent(id)}/rearm`,
+        { method: 'POST', signal },
+        (d) => alertRuleSchema.parse(d),
+      ),
+
+    getNotifications: (signal?: AbortSignal): Promise<Notification[]> =>
+      request('/api/v1/notifications', { method: 'GET', signal }, (d) =>
+        z.array(notificationSchema).parse(d),
+      ),
+
+    markNotificationRead: (id: string, signal?: AbortSignal): Promise<void> =>
+      request(
+        `/api/v1/notifications/${encodeURIComponent(id)}/read`,
+        { method: 'POST', signal },
+        () => undefined,
       ),
   };
 }
