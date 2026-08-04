@@ -175,7 +175,10 @@ else → dead-letter) is now explicitly about persistence, not about delivery on
 **`/hubs/notifications` is exempt from CSRF, and that exemption is a pattern, not a
 one-off.** SignalR's negotiate handshake is a POST, and neither `PriceHub` nor
 `NotificationHub` has a client-invokable method for a forged cross-site request to trigger —
-both are empty `Hub` classes that only ever push server-to-client. `CsrfMiddleware.ExemptHubs`
+both are empty `Hub` classes that only ever push server-to-client. The exemption's risk is
+also bounded independently of that fact: `mp_access` is `SameSite=Lax`, and CORS is
+credentialed against an explicit origin allowlist, so an exempt path is not simply open to
+the internet. `CsrfMiddleware.ExemptHubs`
 is the single source of truth for which hub sits behind which exempt path, and
 `CsrfMiddlewareTests` asserts by reflection that every hub named there declares no public,
 client-invokable methods (`DeclaredOnly`, excluding what it inherits from `Hub`) — so the

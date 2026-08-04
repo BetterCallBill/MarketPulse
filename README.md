@@ -130,7 +130,7 @@ packages/emitter        # Standalone ES module event emitter
 
 - **Outbox pattern** on the publisher: domain events written transactionally with state, relayed to RabbitMQ by a background dispatcher
 - **Idempotent consumers:** the Alerts service dedupes on message ID; redelivery is safe
-- **Resilience:** Polly retry + circuit breaker around the external market data feed; chaos test kills RabbitMQ mid-flow and verifies recovery
+- **Resilience:** Polly retry + circuit breaker around the external market data feed (**slice 6, not yet built** — ticks still come from `FakeTickService`) and a chaos test that kills RabbitMQ mid-flow and verifies recovery (**slice 4b, not yet built**)
 
 ---
 
