@@ -79,6 +79,7 @@ export function AlertCell({ ticker }: AlertCellProps) {
         type="number"
         step="0.01"
         min="0.01"
+        required
         value={threshold}
         onChange={(e) => setThreshold(e.target.value)}
         aria-label={`Alert threshold for ${ticker}`}

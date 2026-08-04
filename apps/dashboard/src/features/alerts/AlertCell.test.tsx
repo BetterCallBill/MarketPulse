@@ -42,6 +42,24 @@ describe('AlertCell', () => {
     expect(screen.getByLabelText('Alert direction for IVV')).toBeInTheDocument();
   });
 
+  it('flags an empty threshold as invalid instead of silently ignoring submit', async () => {
+    let posted = false;
+    server.use(
+      http.post('http://localhost:5100/api/v1/alerts', () => {
+        posted = true;
+        return HttpResponse.json(activeRule, { status: 201 });
+      }),
+    );
+
+    renderCell();
+
+    const thresholdInput = await screen.findByLabelText('Alert threshold for IVV');
+    await userEvent.click(screen.getByRole('button', { name: 'Set alert for IVV' }));
+
+    expect(thresholdInput).toBeInvalid();
+    expect(posted).toBe(false);
+  });
+
   it('creates a rule and swaps to its status', async () => {
     // Stateful handlers: after the POST succeeds, the invalidation-triggered refetch
     // must return the new rule for the cell to swap from form to status.
