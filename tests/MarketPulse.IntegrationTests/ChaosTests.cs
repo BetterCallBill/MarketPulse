@@ -169,15 +169,23 @@ public class ChaosTests(SqlServerFixture sql, RabbitMqFixture rabbit)
             await rabbit.StartBrokerAsync();
 
             // Connection recovery is the client library's job and takes a few seconds;
-            // retry dispatch until exactly one row is confirmed through.
-            var dispatched = 0;
+            // retry dispatch until OUR row is confirmed through. This database is shared
+            // with the rest of MessagingCollection (never reset between classes) and
+            // AlertEvaluationTests deliberately leaves undispatched rows behind, so a
+            // single dispatch pass can legitimately sweep up more than one row — the
+            // aggregate count DispatchPendingAsync returns is cross-class shared state,
+            // not evidence about our row specifically. What this test can actually claim
+            // is scoped to pendingId: keep retrying until its own DispatchedUtc flips.
             await WaitUntilAsync(async () =>
             {
-                dispatched += await TryDispatchAsync(dispatcher);
-                return dispatched >= 1;
-            }, "the outbox row to dispatch after the broker returned");
+                await TryDispatchAsync(dispatcher);
 
-            Assert.Equal(1, dispatched);
+                await using var db = sql.CreateContext();
+                return await db.OutboxMessages
+                    .Where(m => m.Id == pendingId)
+                    .Select(m => m.DispatchedUtc)
+                    .SingleAsync() is not null;
+            }, "the outbox row to dispatch after the broker returned");
 
             // And the API's consumer — which lost its channel in the outage and
             // resubscribed through its supervision loop — lands the row exactly once.
