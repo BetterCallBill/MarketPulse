@@ -143,7 +143,26 @@ public sealed class RabbitMqTickSink : ITickSink, IAsyncDisposable
                 return;
             }
 
-            _channel = channel;
+            // Whatever was here was closed — that is the only reason this method ran — but a
+            // closed channel is still an unreleased AMQP object. Overwriting the field
+            // without disposing leaks one per broker outage, the same defect already fixed
+            // for connections. Swapped first so the sink starts publishing on the new
+            // channel immediately rather than waiting on the old one's teardown, and the
+            // teardown itself is caught: a channel whose connection died can throw on the way
+            // out, and that must not cost the sink the channel it just established.
+            var stale = Interlocked.Exchange(ref _channel, channel);
+
+            if (stale is not null)
+            {
+                try
+                {
+                    await stale.DisposeAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to dispose the stale tick-sink channel.");
+                }
+            }
         }
         catch (OperationCanceledException)
         {

@@ -3,6 +3,7 @@ using MarketPulse.Domain.ValueObjects;
 using MarketPulse.Infrastructure.Messaging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using RabbitMQ.Client;
 
 namespace MarketPulse.UnitTests.Messaging;
@@ -101,6 +102,61 @@ public class RabbitMqTickSinkTests
         // Let the in-flight attempt unwind cleanly rather than leaving it stuck for the
         // rest of the test run.
         factory.Attempts.TrySetException(new InvalidOperationException("test teardown"));
+    }
+
+    [Fact]
+    public async Task Reconnecting_disposes_the_closed_channel_it_replaces()
+    {
+        // Same defect as the connection leak fixed in 2cf3e3b, one level down: the field was
+        // overwritten rather than swapped, so a sink that reconnected after every broker
+        // outage accumulated one unreleased channel per outage.
+        var stale = Substitute.For<IChannel>();
+        stale.IsOpen.Returns(false);
+
+        var replacement = Substitute.For<IChannel>();
+        replacement.IsOpen.Returns(true);
+
+        var handed = new List<IChannel>();
+
+        await using var sink = new RabbitMqTickSink(
+            (_, _) =>
+            {
+                var channel = handed.Count == 0 ? stale : replacement;
+                handed.Add(channel);
+                return Task.FromResult(channel);
+            },
+            Options.Create(UnreachableBroker),
+            NullLogger<RabbitMqTickSink>.Instance);
+
+        var tick = new PriceTick("IVV", 50m, DateTimeOffset.UnixEpoch);
+
+        // First tick: no channel at all, so the background attempt establishes `stale`.
+        await sink.SendAsync(tick, CancellationToken.None);
+        await WaitUntilAsync(() => handed.Count == 1, "the first channel");
+
+        // Second tick: `stale` reports itself closed, so a replacement is established — the
+        // moment the old one has to be released.
+        await sink.SendAsync(tick, CancellationToken.None);
+        await WaitUntilAsync(() => handed.Count == 2, "the replacement channel");
+
+        await WaitUntilAsync(
+            () => stale.ReceivedCalls().Any(c => c.GetMethodInfo().Name == nameof(IChannel.DisposeAsync)),
+            "the stale channel to be disposed");
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, string what)
+    {
+        for (var i = 0; i < 100; i++)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(20);
+        }
+
+        Assert.Fail($"Timed out waiting for {what}.");
     }
 
     [Fact]
