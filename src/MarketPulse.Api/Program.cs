@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using MarketPulse.Api;
 using MarketPulse.Api.Authentication;
 using MarketPulse.Api.Hubs;
+using MarketPulse.Api.Messaging;
 using MarketPulse.Api.Middleware;
 using MarketPulse.Api.RealTime;
 using MarketPulse.Application;
@@ -140,6 +141,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<TickBroadcaster>();
 builder.Services.AddSingleton<ITickSink, SignalRTickSink>();
+builder.Services.AddHostedService<AlertTriggeredConsumer>();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddMessaging();
@@ -167,6 +169,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<PriceHub>("/hubs/prices");
+app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 
 app.Run();
