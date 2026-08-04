@@ -8,38 +8,20 @@ using RabbitMQ.Client.Events;
 
 namespace MarketPulse.Alerts;
 
+/// <summary>
+/// Subscription, channel lifecycle and resubscription after a broker outage all live in
+/// <see cref="RabbitMqConsumerService"/>. What is left here is the only part that is about
+/// prices: deserialize a tick, evaluate it, ack.
+/// </summary>
 public sealed class PriceConsumer(
     RabbitMqConnection connection,
     IServiceScopeFactory scopeFactory,
     IOptions<RabbitMqOptions> options,
-    ILogger<PriceConsumer> logger) : BackgroundService
+    ILogger<PriceConsumer> logger) : RabbitMqConsumerService(connection, options, logger)
 {
-    private readonly RabbitMqOptions _options = options.Value;
+    protected override string QueueName => Options.PricesQueue;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        var channel = await connection.CreateChannelAsync(publisherConfirms: false, stoppingToken);
-        await RabbitMqTopology.DeclareAsync(channel, _options, stoppingToken);
-
-        // Without a prefetch limit the broker pushes the whole queue at us and the TTL
-        // stops protecting anything — the messages would already be in our process.
-        await channel.BasicQosAsync(0, _options.PrefetchCount, global: false, stoppingToken);
-
-        var consumer = new AsyncEventingBasicConsumer(channel);
-        consumer.ReceivedAsync += (_, ea) => HandleAsync(channel, ea, stoppingToken);
-
-        await channel.BasicConsumeAsync(
-            _options.PricesQueue, autoAck: false, consumer, stoppingToken);
-
-        logger.LogInformation(
-            "PriceConsumer listening on {Queue}.", _options.PricesQueue);
-
-        await Task.Delay(Timeout.Infinite, stoppingToken).ContinueWith(_ => { });
-
-        await channel.DisposeAsync();
-    }
-
-    private async Task HandleAsync(
+    protected override async Task HandleAsync(
         IChannel channel, BasicDeliverEventArgs ea, CancellationToken ct)
     {
         var correlationId = ea.BasicProperties.CorrelationId;

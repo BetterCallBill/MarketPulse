@@ -25,9 +25,9 @@ public sealed class RabbitMqConnection(
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_connection is { IsOpen: true })
+        if (_connection is { } live && IsStillOurs(live))
         {
-            return _connection;
+            return live;
         }
 
         // Linked so a shutdown mid-backoff cancels this attempt instead of leaving
@@ -40,19 +40,18 @@ public sealed class RabbitMqConnection(
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            if (_connection is { IsOpen: true })
+            if (_connection is { } stillLive && IsStillOurs(stillLive))
             {
-                return _connection;
+                return stillLive;
             }
 
             if (_connection is not null)
             {
-                // Not the automatic-recovery path — that keeps the same IConnection alive
-                // in place. This is a connection that closed for good (or never opened
-                // cleanly), so the old object and any channels it still owns must be
-                // released before it is replaced. A connection that died abnormally may
-                // itself throw on dispose; that must not stop us from opening its
-                // replacement.
+                // Only reached for a connection the client has given up on (see
+                // IsStillOurs). The old object and any channels it still owns must be
+                // released before it is replaced, or every outage leaks one connection.
+                // A connection that died abnormally may itself throw on dispose; that must
+                // not stop us from opening its replacement.
                 try
                 {
                     await _connection.DisposeAsync();
@@ -74,6 +73,50 @@ public sealed class RabbitMqConnection(
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// Whether the cached connection is still the one callers should be using — either open,
+    /// or closed but being recovered in place by the client.
+    ///
+    /// <para><c>IsOpen == false</c> is emphatically <em>not</em> "dead". With
+    /// <c>AutomaticRecoveryEnabled</c>, <c>CreateConnectionAsync</c> hands back an
+    /// <c>AutorecoveringConnection</c> whose <c>IsOpen</c> delegates straight to the inner
+    /// connection, so it reads false for the whole recovery window — <c>NetworkRecoveryInterval</c>
+    /// (5s by default) per attempt, retried indefinitely. Disposing on that signal destroys a
+    /// connection that was about to come back, and takes every channel and consumer on it with
+    /// it; the consumers then never resubscribe and the pipeline dies silently. That is exactly
+    /// the bug this predicate exists to prevent.</para>
+    ///
+    /// <para>The condition below mirrors <c>AutorecoveringConnection.ShouldTriggerConnectionRecovery</c>
+    /// in RabbitMQ.Client 7.2.1: recovery runs for a peer-initiated shutdown unless the broker
+    /// refused access, and for a library-initiated one (an EOF from a lost node) unless the
+    /// AppDomain is unloading. Anything else — notably an application-initiated close — is
+    /// final, and only then is replacing the connection the right move. Mirroring the client's
+    /// own predicate is deliberate: the alternative is guessing, and guessing here is what
+    /// produced the bug.</para>
+    /// </summary>
+    private static bool IsStillOurs(IConnection connection)
+    {
+        if (connection.IsOpen)
+        {
+            return true;
+        }
+
+        // Null while the connection is being torn down but before a reason is recorded.
+        // Treated as recovering, because "no reason yet" is not evidence of a terminal one.
+        if (connection.CloseReason is not { } reason)
+        {
+            return true;
+        }
+
+        return reason.Initiator switch
+        {
+            ShutdownInitiator.Peer => reason.ReplyCode != Constants.AccessRefused,
+            ShutdownInitiator.Library =>
+                reason is not { Exception: ThreadAbortException, ReplyCode: Constants.InternalError },
+            _ => false
+        };
     }
 
     public async Task<IChannel> CreateChannelAsync(bool publisherConfirms, CancellationToken ct)

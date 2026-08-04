@@ -13,36 +13,22 @@ using RabbitMQ.Client.Events;
 
 namespace MarketPulse.Api.Messaging;
 
+/// <summary>
+/// Subscription, channel lifecycle and resubscription after a broker outage all live in
+/// <see cref="RabbitMqConsumerService"/>. What is left here is the only part that is about
+/// alerts: persist idempotently, push, ack — and classify a failure before acknowledging it.
+/// </summary>
 public sealed class AlertTriggeredConsumer(
     RabbitMqConnection connection,
     IServiceScopeFactory scopeFactory,
     IHubContext<NotificationHub> hub,
     IOptions<RabbitMqOptions> options,
-    ILogger<AlertTriggeredConsumer> logger) : BackgroundService
+    ILogger<AlertTriggeredConsumer> logger)
+    : RabbitMqConsumerService(connection, options, logger)
 {
-    private readonly RabbitMqOptions _options = options.Value;
+    protected override string QueueName => Options.NotificationsQueue;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        var channel = await connection.CreateChannelAsync(publisherConfirms: false, stoppingToken);
-        await RabbitMqTopology.DeclareAsync(channel, _options, stoppingToken);
-        await channel.BasicQosAsync(0, _options.PrefetchCount, global: false, stoppingToken);
-
-        var consumer = new AsyncEventingBasicConsumer(channel);
-        consumer.ReceivedAsync += (_, ea) => HandleAsync(channel, ea, stoppingToken);
-
-        await channel.BasicConsumeAsync(
-            _options.NotificationsQueue, autoAck: false, consumer, stoppingToken);
-
-        logger.LogInformation(
-            "AlertTriggeredConsumer listening on {Queue}.", _options.NotificationsQueue);
-
-        await Task.Delay(Timeout.Infinite, stoppingToken).ContinueWith(_ => { });
-
-        await channel.DisposeAsync();
-    }
-
-    private async Task HandleAsync(
+    protected override async Task HandleAsync(
         IChannel channel, BasicDeliverEventArgs ea, CancellationToken ct)
     {
         AlertTriggeredMessage? message;
