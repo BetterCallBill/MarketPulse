@@ -32,6 +32,11 @@ builder.Services.AddOptions<AuthOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder.Services.AddOptions<RabbitMqOptions>()
+    .Bind(builder.Configuration.GetSection(RabbitMqOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? throw new InvalidOperationException("The Jwt configuration section is missing.");
 
@@ -134,8 +139,10 @@ builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<TickBroadcaster>();
+builder.Services.AddSingleton<ITickSink, SignalRTickSink>();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString);
+builder.Services.AddMessaging();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
