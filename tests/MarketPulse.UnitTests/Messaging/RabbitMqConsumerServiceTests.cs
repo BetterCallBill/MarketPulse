@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MarketPulse.Application.Configuration;
 using MarketPulse.Infrastructure.Messaging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -186,5 +187,74 @@ public class RabbitMqConsumerServiceTests
 
         Assert.Same(stop, completed);
         consumer.Dispose();
+    }
+
+    [Fact]
+    public async Task A_resubscribe_after_a_channel_shutdown_waits_at_least_one_delay()
+    {
+        // Without the floor, a channel that dies immediately after every successful
+        // subscribe re-loops with no backoff at all: subscribe, die, subscribe, die — a
+        // hot loop the reset-on-success behaviour was never meant to allow.
+        var handed = new List<(IChannel Channel, long Timestamp)>();
+
+        Task<IChannel> Create(bool _, CancellationToken __)
+        {
+            var channel = OpenChannel();
+
+            lock (handed)
+            {
+                handed.Add((channel, Stopwatch.GetTimestamp()));
+            }
+
+            return Task.FromResult(channel);
+        }
+
+        var consumer = new TestConsumer(Create);
+        await consumer.StartAsync(CancellationToken.None);
+
+        try
+        {
+            for (var round = 1; round <= 3; round++)
+            {
+                var expected = round;
+                await WaitUntilAsync(
+                    () => { lock (handed) { return handed.Count >= expected; } },
+                    $"subscription {round}");
+
+                IChannel current;
+                lock (handed)
+                {
+                    current = handed[expected - 1].Channel;
+                }
+
+                current.ChannelShutdownAsync += Raise.Event<AsyncEventHandler<ShutdownEventArgs>>(
+                    current,
+                    new ShutdownEventArgs(ShutdownInitiator.Library, 541, "connection lost"));
+            }
+
+            await WaitUntilAsync(
+                () => { lock (handed) { return handed.Count >= 4; } },
+                "the final resubscription");
+
+            lock (handed)
+            {
+                for (var i = 1; i < 4; i++)
+                {
+                    var gap = Stopwatch.GetElapsedTime(
+                        handed[i - 1].Timestamp, handed[i].Timestamp);
+
+                    // TestConsumer's firstRetryDelay is 5 ms. Task.Delay only ever waits at
+                    // least its argument, so the floor is a safe lower bound to assert.
+                    Assert.True(
+                        gap >= TimeSpan.FromMilliseconds(5),
+                        $"Resubscribe {i} happened after only {gap.TotalMilliseconds:F2} ms.");
+                }
+            }
+        }
+        finally
+        {
+            await consumer.StopAsync(CancellationToken.None);
+            consumer.Dispose();
+        }
     }
 }
