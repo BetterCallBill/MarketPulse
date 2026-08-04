@@ -72,6 +72,36 @@ RabbitMQ mid-flow and proves zero lost alerts.
 *Depends on:* 4a. **The README's headline claim — alerts that survive an outage — is not
 substantiated until this slice lands.**
 
+#### Carried over from 4a
+
+4a's reviews deferred five findings, none blocking, recorded here because slice ledgers live
+in gitignored `.superpowers/` and do not survive the branch. The first two are the ones worth
+fixing while the messaging code is still fresh:
+
+- **`RabbitMqEventPublisher.DisposeAsync` does not take `_gate` before disposing it.** The
+  `_disposed` flag narrows the race with a concurrent `PublishAsync` but does not close it, so
+  a caller past the flag check can still meet a disposed semaphore. `RabbitMqConnection` does
+  this correctly — copy its shape. The code comment currently claims a guarantee slightly
+  stronger than what it delivers.
+- **`RabbitMqConsumerService` resets its retry delay to zero on a successful subscribe**, so a
+  channel that died immediately after every successful subscribe would re-loop with no backoff.
+  No message-driven path can close a channel deterministically today, so this is theoretical —
+  a floor of one delay after a shutdown-triggered resubscribe removes the class.
+- A channel can be disposed under an in-flight `HandleAsync`, whose subsequent ack then throws.
+  At-least-once is preserved (the delivery was never acked and the channel is dead anyway); the
+  effect is log noise.
+- **The transient requeue loop is still unbounded.** Already named in the 4a spec and ADR-009 as
+  observability-slice work: distinguishing a slow-burning transient fault from a permanent one
+  needs a redelivery counter or a delayed retry queue, and somewhere to see it happening.
+- `BrokerOutageTests` leaves a durable randomly-named queue and binding per run. The broker
+  container is per-run, so it self-cleans; hygiene only.
+
+**Also outstanding from 4a:** its spec's manual done-criteria were never rehearsed — starting
+both processes by hand, watching a real alert fire, and stopping/restarting the broker to see
+the outbox flush. A pre-existing SQL Server container blocked `docker compose up` at the time.
+The automated suite covers the behaviour, including a real broker-severance test, but the
+hand-run rehearsal is exactly what 4b's chaos test automates, so it lands naturally here.
+
 ### 5 · Portfolio and transactions · phase 1 · may split
 `Portfolio` aggregate, holdings, buy/sell transactions, cost basis, realised and unrealised
 P&L, and the dashboard surface for them. Closes the largest gap between the README's product
