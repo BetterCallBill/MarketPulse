@@ -195,6 +195,11 @@ public class RabbitMqConsumerServiceTests
         // Without the floor, a channel that dies immediately after every successful
         // subscribe re-loops with no backoff at all: subscribe, die, subscribe, die — a
         // hot loop the reset-on-success behaviour was never meant to allow.
+        //
+        // Use a 250 ms floor to exceed the ambient noise in the test (WaitUntilAsync polling
+        // at 25 ms strides, NSubstitute event dispatch, TCS continuation hops), so the test
+        // can discriminate between floor-present and floor-missing. TestConsumer's 5 ms delay
+        // is too small — the test environment's own overhead already exceeds it.
         var handed = new List<(IChannel Channel, long Timestamp)>();
 
         Task<IChannel> Create(bool _, CancellationToken __)
@@ -209,7 +214,8 @@ public class RabbitMqConsumerServiceTests
             return Task.FromResult(channel);
         }
 
-        var consumer = new TestConsumer(Create);
+        // Dedicated consumer for this test with a 250 ms floor to exceed ambient noise.
+        var consumer = new ResubscribeFloorTestConsumer(Create);
         await consumer.StartAsync(CancellationToken.None);
 
         try
@@ -243,10 +249,12 @@ public class RabbitMqConsumerServiceTests
                     var gap = Stopwatch.GetElapsedTime(
                         handed[i - 1].Timestamp, handed[i].Timestamp);
 
-                    // TestConsumer's firstRetryDelay is 5 ms. Task.Delay only ever waits at
-                    // least its argument, so the floor is a safe lower bound to assert.
+                    // ResubscribeFloorTestConsumer's firstRetryDelay is 250 ms. Task.Delay only
+                    // ever waits at least its argument, so the floor is a safe lower bound to
+                    // assert. This margin exceeds the ambient noise (polling, event dispatch,
+                    // TCS hops) so the test can catch a missing floor.
                     Assert.True(
-                        gap >= TimeSpan.FromMilliseconds(5),
+                        gap >= TimeSpan.FromMilliseconds(250),
                         $"Resubscribe {i} happened after only {gap.TotalMilliseconds:F2} ms.");
                 }
             }
@@ -256,5 +264,23 @@ public class RabbitMqConsumerServiceTests
             await consumer.StopAsync(CancellationToken.None);
             consumer.Dispose();
         }
+    }
+
+    /// <summary>
+    /// A test consumer with a 250 ms delay floor, large enough to exceed the ambient noise
+    /// in the test (polling, event dispatch, etc.) so the test can discriminate between
+    /// floor-present and floor-missing. The cap on MaxConnectionRetryDelay does not apply
+    /// to the floor assignment (only to the failure-path doubling in NextDelay), so 250 ms
+    /// is not capped by the 20 ms MaxConnectionRetryDelay in TestOptions.
+    /// </summary>
+    private sealed class ResubscribeFloorTestConsumer(Func<bool, CancellationToken, Task<IChannel>> createChannel)
+        : RabbitMqConsumerService(
+            createChannel, TestOptions(), NullLogger.Instance, TimeSpan.FromMilliseconds(250))
+    {
+        protected override string QueueName => Queue;
+
+        protected override Task HandleAsync(
+            IChannel channel, BasicDeliverEventArgs delivery, CancellationToken ct) =>
+            Task.CompletedTask;
     }
 }
