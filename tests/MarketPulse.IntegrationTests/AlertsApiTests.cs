@@ -22,6 +22,14 @@ public class AlertsApiTests(SqlServerFixture fixture)
         var created = await client.PostAsJsonAsync("/api/v1/alerts", NewRule());
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
+        // The Location header must be a URL that means what it says. It used to be
+        // `/api/v1/alerts?id=<guid>` — CreatedAtAction pointing a route value at the
+        // collection action, which has no `id` parameter to bind it to — so a client that
+        // followed it got every rule the user has and no indication that the query string had
+        // been ignored. There is no GET /alerts/{id} in this slice's API surface, so the
+        // collection, without the invented route value, is the honest answer.
+        Assert.Equal("/api/v1/alerts", created.Headers.Location?.PathAndQuery);
+
         var rules = await client.GetFromJsonAsync<List<RuleResponse>>("/api/v1/alerts");
 
         var rule = Assert.Single(rules!);
