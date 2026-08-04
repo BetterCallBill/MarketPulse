@@ -10,6 +10,9 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
     public DbSet<Ticker> Tickers => Set<Ticker>();
     public DbSet<Watchlist> Watchlists => Set<Watchlist>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<AlertRule> AlertRules => Set<AlertRule>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -105,6 +108,64 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
                     AddedUtc = SeedData.DevWatchlistItemsAddedUtc
                 }));
             });
+        });
+
+        b.Entity<AlertRule>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Ticker).HasMaxLength(8).IsRequired();
+            e.Property(x => x.Threshold).HasPrecision(18, 4);
+            e.Property(x => x.TriggeredPrice).HasPrecision(18, 4);
+
+            // Stored as strings. An enum persisted as an int is unreadable in a query window and
+            // silently reorders if a member is ever inserted in the middle.
+            e.Property(x => x.Direction).HasConversion<string>().HasMaxLength(8).IsRequired();
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
+
+            e.Property(x => x.RowVersion).IsRowVersion();
+
+            // The worker's hot query: every tick asks for one ticker's active rules.
+            e.HasIndex(x => new { x.Ticker, x.Status });
+
+            // The API's query: one user's rules.
+            e.HasIndex(x => x.UserId);
+
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<Notification>(e =>
+        {
+            e.HasKey(x => x.Id);
+
+            // The dedupe. Not an optimisation — the correctness of the whole delivery path.
+            e.HasIndex(x => x.MessageId).IsUnique();
+
+            e.Property(x => x.Ticker).HasMaxLength(8).IsRequired();
+            e.Property(x => x.Direction).HasConversion<string>().HasMaxLength(8).IsRequired();
+            e.Property(x => x.Threshold).HasPrecision(18, 4);
+            e.Property(x => x.TriggeredPrice).HasPrecision(18, 4);
+
+            // The panel's query: newest first, for one user.
+            e.HasIndex(x => new { x.UserId, x.CreatedUtc });
+
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<OutboxMessage>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.Type).HasMaxLength(128).IsRequired();
+            e.Property(x => x.Payload).IsRequired();
+            e.Property(x => x.CorrelationId).HasMaxLength(128);
+
+            // Filtered: the dispatcher polls twice a second forever, and this table only grows.
+            // An unfiltered index would still make it scan every dispatched row ever written.
+            e.HasIndex(x => x.OccurredUtc)
+                .HasFilter("[DispatchedUtc] IS NULL")
+                .HasDatabaseName("IX_OutboxMessages_Pending");
         });
     }
 }
