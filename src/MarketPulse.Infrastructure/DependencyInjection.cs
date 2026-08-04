@@ -47,6 +47,7 @@ public static class InfrastructureServiceCollectionExtensions
     {
         services.AddSingleton<RabbitMqConnection>();
         services.AddSingleton<ITickSink, RabbitMqTickSink>();
+        services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
         return services;
     }
 }

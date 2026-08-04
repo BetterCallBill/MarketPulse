@@ -19,6 +19,7 @@ builder.Services.AddMessaging();
 
 builder.Services.AddScoped<AlertEvaluator>();
 builder.Services.AddHostedService<PriceConsumer>();
+builder.Services.AddHostedService<OutboxDispatcher>();
 
 var host = builder.Build();
 await host.RunAsync();
