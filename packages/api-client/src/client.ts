@@ -2,13 +2,18 @@ import { z } from 'zod';
 import {
   alertRuleSchema,
   notificationSchema,
+  portfolioSchema,
   problemDetailsSchema,
   sessionSchema,
+  transactionSchema,
   watchlistSchema,
   type AlertDirection,
   type AlertRule,
   type Notification,
+  type Portfolio,
   type Session,
+  type Transaction,
+  type TradeSide,
   type Watchlist,
 } from './schemas';
 
@@ -198,6 +203,34 @@ export function createApiClient(baseUrl: string) {
         `/api/v1/notifications/${encodeURIComponent(id)}/read`,
         { method: 'POST', signal, keepalive: true },
         () => undefined,
+      ),
+
+    getPortfolio: (signal?: AbortSignal): Promise<Portfolio> =>
+      request('/api/v1/portfolio', { method: 'GET', signal }, (d) =>
+        portfolioSchema.parse(d),
+      ),
+
+    getTransactions: (skip: number, take: number, signal?: AbortSignal): Promise<Transaction[]> =>
+      request(
+        `/api/v1/portfolio/transactions?skip=${skip}&take=${take}`,
+        { method: 'GET', signal },
+        (d) => z.array(transactionSchema).parse(d),
+      ),
+
+    recordTransaction: (
+      trade: { ticker: string; side: TradeSide; units: number; price: number },
+      idempotencyKey: string,
+      signal?: AbortSignal,
+    ): Promise<Portfolio> =>
+      request(
+        '/api/v1/portfolio/transactions',
+        {
+          method: 'POST',
+          body: JSON.stringify(trade),
+          headers: { 'Idempotency-Key': idempotencyKey },
+          signal,
+        },
+        (d) => portfolioSchema.parse(d),
       ),
   };
 }

@@ -185,4 +185,51 @@ describe('createApiClient', () => {
 
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).keepalive).toBe(true);
   });
+
+  it('records a trade with the idempotency and CSRF headers attached', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ holdings: [], totalRealisedPnL: 0 }, 201),
+    );
+
+    await createApiClient(BASE).recordTransaction(
+      { ticker: 'IVV', side: 'Buy', units: 10, price: 60 },
+      'key-123',
+    );
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${BASE}/api/v1/portfolio/transactions`);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.method).toBe('POST');
+    const headers = init.headers as Record<string, string>;
+    expect(headers['Idempotency-Key']).toBe('key-123');
+    expect(headers['X-CSRF-Token']).toBe('nonce-123');
+    expect(JSON.parse(init.body as string)).toEqual({
+      ticker: 'IVV',
+      side: 'Buy',
+      units: 10,
+      price: 60,
+    });
+  });
+
+  it('pages transactions with skip and take', async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+
+    await createApiClient(BASE).getTransactions(20, 10);
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      `${BASE}/api/v1/portfolio/transactions?skip=20&take=10`,
+    );
+  });
+
+  it('parses the portfolio from getPortfolio', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        holdings: [{ ticker: 'IVV', units: 10, averageCost: 60, realisedPnL: 0 }],
+        totalRealisedPnL: 0,
+      }),
+    );
+
+    const portfolio = await createApiClient(BASE).getPortfolio();
+
+    expect(portfolio.holdings[0]?.averageCost).toBe(60);
+  });
 });
