@@ -1,11 +1,5 @@
-import {
-  ApiError,
-  type Portfolio,
-  type TradeSide,
-  type Transaction,
-} from '@marketpulse/api-client';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { ApiError, type Portfolio, type TradeSide } from '@marketpulse/api-client';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api';
 
 export const portfolioKey = ['portfolio'] as const;
@@ -19,31 +13,38 @@ export function usePortfolio() {
 }
 
 /**
- * Load-more over the server's skip/take paging. Pages accumulate in the query cache under
- * ['transactions', pageCount]; invalidating ['transactions'] (as a recorded trade does)
- * refetches every held page — and because the new trade is by definition at the head, the
- * simple reset-to-consistency beats reconciling a fresh head against stale deeper pages.
+ * Load-more over the server's skip/take paging, via useInfiniteQuery's skip-page
+ * accumulation: every request's `take` is fixed at `pageSize`, never near the server's
+ * cap (`GetTransactionsQuery` rejects `Take > 100`). The rejected alternative — a single
+ * growing-window query re-requesting `take = pages * pageSize` from `skip = 0` — hits that
+ * cap at the sixth default-sized load-more (`take=120`), fails with a 400, and (because
+ * `keepPreviousData` kept the old rows and a failed fetch still reports a non-full window)
+ * looks exactly like "history exhausted" instead of "request rejected". Each page here is
+ * its own request at `skip = itemsFetchedSoFar`, so the window never grows past `pageSize`.
+ * Pages accumulate in the query cache under ['transactions', pageSize]; invalidating
+ * ['transactions'] (as a recorded trade does) refetches every held page — and because the
+ * new trade is by definition at the head, the simple reset-to-consistency beats reconciling
+ * a fresh head against stale deeper pages.
  */
 export function useTransactions(pageSize = 20) {
-  const [pages, setPages] = useState(1);
-
-  const { data, isPending, isFetching } = useQuery({
-    queryKey: [...transactionsKey, pages, pageSize],
-    queryFn: ({ signal }) => apiClient.getTransactions(0, pages * pageSize, signal),
-    // Keep previous data visible during query-key change (page growth) to avoid blanking
-    // the list while the new page loads. Once data arrives, the new full window replaces it.
-    placeholderData: keepPreviousData,
-  });
-
-  const transactions: Transaction[] = data ?? [];
+  const { data, isPending, isFetchingNextPage, hasNextPage, fetchNextPage, isError } =
+    useInfiniteQuery({
+      queryKey: [...transactionsKey, pageSize],
+      queryFn: ({ pageParam, signal }) => apiClient.getTransactions(pageParam, pageSize, signal),
+      initialPageParam: 0,
+      // A full page means the server may have more; a short one means we drained it —
+      // same heuristic as before, now applied per page instead of to a growing window.
+      getNextPageParam: (lastPage, allPages) =>
+        lastPage.length === pageSize ? allPages.flat().length : undefined,
+    });
 
   return {
-    transactions,
+    transactions: data?.pages.flat() ?? [],
     isPending,
-    isFetching,
-    // A full window means the server may have more; a short one means we drained it.
-    hasMore: transactions.length === pages * pageSize,
-    loadMore: () => setPages((p) => p + 1),
+    isFetching: isFetchingNextPage,
+    hasMore: hasNextPage,
+    loadMore: fetchNextPage,
+    isError,
   };
 }
 

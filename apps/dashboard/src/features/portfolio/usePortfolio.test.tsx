@@ -25,11 +25,12 @@ const server = setupServer(
       totalRealisedPnL: 31,
     }),
   ),
-  // Slices by take: the hook fetches a growing newest-first window (skip stays 0).
+  // Real skip/take paging: each page request asks for its own slice, never a growing window.
   http.get('http://localhost:5100/api/v1/portfolio/transactions', ({ request }) => {
     const url = new URL(request.url);
+    const skip = Number(url.searchParams.get('skip'));
     const take = Number(url.searchParams.get('take'));
-    return HttpResponse.json([...page0, ...page1].slice(0, take));
+    return HttpResponse.json([...page0, ...page1].slice(skip, skip + take));
   }),
 );
 
@@ -73,6 +74,52 @@ describe('useTransactions', () => {
     await waitFor(() => expect(result.current.transactions).toHaveLength(3));
     expect(result.current.transactions[2]?.id).toBe('t1');
     expect(result.current.hasMore).toBe(false); // short page ends it
+  });
+
+  it('never requests more than pageSize per page, no matter how many loadMores fire (cap-safety)', async () => {
+    // The server rejects take > 100; a growing take=pages*pageSize window would hit that
+    // cap on real histories. This proves each page request stays fixed at pageSize instead.
+    const fixture = Array.from({ length: 5 }, (_, i) => ({
+      id: `f${i}`,
+      ticker: 'IVV',
+      side: 'Buy',
+      units: 1,
+      price: 60,
+      occurredUtc: `2026-08-05T0${i}:00:00+00:00`,
+      recordedUtc: `2026-08-05T0${i}:00:00+00:00`,
+    }));
+    const seenTakes: number[] = [];
+    server.use(
+      http.get('http://localhost:5100/api/v1/portfolio/transactions', ({ request }) => {
+        const url = new URL(request.url);
+        const skip = Number(url.searchParams.get('skip'));
+        const take = Number(url.searchParams.get('take'));
+        seenTakes.push(take);
+        return HttpResponse.json(fixture.slice(skip, skip + take));
+      }),
+    );
+
+    const { Wrapper } = wrapper();
+    const { result } = renderHook(() => useTransactions(2), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.transactions).toHaveLength(2));
+
+    await act(async () => {
+      result.current.loadMore();
+    });
+    await waitFor(() => expect(result.current.transactions).toHaveLength(4));
+
+    await act(async () => {
+      result.current.loadMore();
+    });
+    await waitFor(() => expect(result.current.transactions).toHaveLength(5));
+
+    await act(async () => {
+      result.current.loadMore(); // history is drained; this must be a no-op, not a bigger take
+    });
+
+    expect(seenTakes.length).toBeGreaterThanOrEqual(3);
+    expect(seenTakes.every((take) => take === 2)).toBe(true);
   });
 });
 

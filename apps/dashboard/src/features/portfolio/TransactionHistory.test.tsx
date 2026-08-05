@@ -14,8 +14,10 @@ const fixture = [
 
 const server = setupServer(
   http.get('http://localhost:5100/api/v1/portfolio/transactions', ({ request }) => {
-    const take = Number(new URL(request.url).searchParams.get('take'));
-    return HttpResponse.json(fixture.slice(0, take));
+    const url = new URL(request.url);
+    const skip = Number(url.searchParams.get('skip'));
+    const take = Number(url.searchParams.get('take'));
+    return HttpResponse.json(fixture.slice(skip, skip + take));
   }),
 );
 
@@ -61,10 +63,12 @@ describe('TransactionHistory', () => {
   it('keeps rows and load-more button mounted while a page fetch is in flight', async () => {
     server.use(
       http.get('http://localhost:5100/api/v1/portfolio/transactions', async ({ request }) => {
-        const take = Number(new URL(request.url).searchParams.get('take'));
+        const url = new URL(request.url);
+        const skip = Number(url.searchParams.get('skip'));
+        const take = Number(url.searchParams.get('take'));
         // Delay the response so we can observe the intermediate state.
         await delay(50);
-        return HttpResponse.json(fixture.slice(0, take));
+        return HttpResponse.json(fixture.slice(skip, skip + take));
       }),
     );
 
@@ -103,5 +107,21 @@ describe('TransactionHistory', () => {
 
     // Once the fetch resolves, the rows appear.
     expect(await screen.findByText('Sell 4 IVV @ $70.00')).toBeInTheDocument();
+  });
+
+  it('shows an error state instead of a false empty state when the fetch fails', async () => {
+    server.use(
+      http.get('http://localhost:5100/api/v1/portfolio/transactions', () =>
+        HttpResponse.json(
+          { title: 'server-error', status: 500, detail: 'Something went wrong.' },
+          { status: 500 },
+        ),
+      ),
+    );
+
+    renderHistory();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not load your history.');
+    expect(screen.queryByText('No trades recorded yet.')).not.toBeInTheDocument();
   });
 });

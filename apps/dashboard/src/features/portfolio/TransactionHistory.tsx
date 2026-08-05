@@ -3,7 +3,8 @@ import styles from './PortfolioScreen.module.css';
 import { useTransactions } from './usePortfolio';
 
 export function TransactionHistory({ pageSize = 20 }: { pageSize?: number }) {
-  const { transactions, hasMore, loadMore, isPending, isFetching } = useTransactions(pageSize);
+  const { transactions, hasMore, loadMore, isPending, isFetching, isError } =
+    useTransactions(pageSize);
 
   return (
     <section aria-labelledby="history-heading">
@@ -13,6 +14,8 @@ export function TransactionHistory({ pageSize = 20 }: { pageSize?: number }) {
       <Panel>
         {isPending ? (
           <p className={styles.empty}>Loading history…</p>
+        ) : isError ? (
+          <p role="alert">Could not load your history.</p>
         ) : transactions.length === 0 ? (
           <p className={styles.empty}>No trades recorded yet.</p>
         ) : (
@@ -27,11 +30,12 @@ export function TransactionHistory({ pageSize = 20 }: { pageSize?: number }) {
             ))}
           </ul>
         )}
-        {/* During a page fetch, the placeholder list makes hasMore false (0 !== n×pageSize),
-            so the button must key off isFetching to stay mounted-and-disabled rather than
-            vanishing mid-fetch. */}
+        {/* useInfiniteQuery keeps already-fetched pages visible while the next page is in
+            flight, so rows never blank mid-fetch; the button just needs to stay mounted and
+            disabled (via isFetchingNextPage) instead of vanishing while hasMore momentarily
+            lags the request. */}
         {(hasMore || isFetching) && !isPending && (
-          <Button variant="ghost" onClick={loadMore} disabled={isFetching}>
+          <Button variant="ghost" onClick={() => loadMore()} disabled={isFetching}>
             Load more
           </Button>
         )}
