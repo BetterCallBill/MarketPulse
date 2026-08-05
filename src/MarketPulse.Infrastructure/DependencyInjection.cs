@@ -16,6 +16,19 @@ namespace MarketPulse.Infrastructure;
 public static class InfrastructureServiceCollectionExtensions
 {
     /// <summary>
+    /// A current, stable desktop Chrome UA string. The unofficial `v8/finance/chart`
+    /// endpoint serves browsers; a bare UA-less client (the BCL's <see cref="HttpClient"/>
+    /// default) is itself the fingerprint that gets throttled — a 25-way concurrent burst
+    /// with no <c>User-Agent</c> drew sustained 429s in this slice's manual rehearsal
+    /// (task-6-report.md), while the same request with this header succeeded. Not a
+    /// disguise so much as declining to look like the one thing every legitimate browser
+    /// request is not: anonymous.
+    /// </summary>
+    private const string YahooUserAgent =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Chrome/124.0.0.0 Safari/537.36";
+
+    /// <summary>
     /// Everything both hosts need: the shared database and the repositories over it. The
     /// worker takes this; the API takes this plus the tick source and the auth services.
     /// </summary>
@@ -66,6 +79,8 @@ public static class InfrastructureServiceCollectionExtensions
         {
             var options = provider.GetRequiredService<IOptions<MarketDataOptions>>().Value;
             client.BaseAddress = new Uri(options.BaseUrl);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(YahooUserAgent);
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         })
         .AddResilienceHandler("market-data", (builder, context) =>
         {

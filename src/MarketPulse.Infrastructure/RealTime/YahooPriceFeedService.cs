@@ -49,12 +49,27 @@ public sealed class YahooPriceFeedService(
 
     private async Task PollOnceAsync(string[] codes, CancellationToken ct)
     {
-        // Concurrent within the poll, bounded by the symbol count (~25) — no throttling
-        // machinery for a workload this small.
-        var polls = codes.Select(async code =>
+        // Not a simultaneous 25-way burst: that shape is itself a throttling trigger (see
+        // DependencyInjection's YahooUserAgent comment and ADR-010's rehearsal note) — a
+        // keyless endpoint sees 25 concurrent connections from one client as scraping
+        // regardless of headers. Request *starts* are instead spread across half the poll
+        // interval (leaving the other half as margin before the next poll), one gap per
+        // symbol, computed from the live options rather than hardcoded so it tracks
+        // PollInterval and the seed set size together. At the 60s/25-symbol defaults that is
+        // (60s / 2) / 25 ≈ 1.2s apart. Each symbol still runs its own try/catch and writes
+        // (or skips) independently — staggering the start does not change per-symbol error
+        // isolation, only when each request begins.
+        var gap = options.Value.PollInterval / 2 / codes.Length;
+
+        var polls = codes.Select(async (code, index) =>
         {
             try
             {
+                if (index > 0)
+                {
+                    await Task.Delay(gap * index, timeProvider, ct);
+                }
+
                 var price = await client.GetPriceAsync(YahooSymbols.ToYahoo(code), ct);
 
                 if (price is not { } value)

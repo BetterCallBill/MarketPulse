@@ -17,8 +17,10 @@ namespace MarketPulse.UnitTests.RealTime;
 /// pipeline in isolation against a <see cref="FakeTimeProvider"/>; composing it here would
 /// fight this file's fake clock (the pipeline has its own retry/breaker timing) for no
 /// additional coverage, since the per-symbol catch below treats a pipeline exhaustion and a
-/// plain-client failure identically. The composition that wires the real pipeline in is
-/// covered by MarketDataCompositionTests.
+/// plain-client failure identically. <c>MarketDataCompositionTests</c> covers only which
+/// hosted service composition selects (<c>FakeTickService</c> vs. this one) — it does not
+/// exercise the resilience pipeline being wired onto the typed client at all; that claim
+/// belongs to <c>MarketDataResilienceTests</c> and this file alone.
 /// </summary>
 public class YahooPriceFeedServiceTests
 {
@@ -127,14 +129,66 @@ public class YahooPriceFeedServiceTests
             }
 
             Assert.Equal(Codes.Length, ticks.Count);
-            var observationTime = clock.GetUtcNow();
 
             foreach (var code in Codes)
             {
                 var tick = Assert.Single(ticks, t => t.Ticker == code);
                 Assert.DoesNotContain('.', tick.Ticker);
                 Assert.True(tick.Price > 0);
-                Assert.Equal(observationTime, tick.TimestampUtc);
+            }
+
+            // Staggered starts (see PollOnceAsync) mean each symbol's tick is timestamped
+            // at its own request's start, not one shared instant: timestamps taken in
+            // Codes order are non-decreasing, and the whole poll's span never exceeds the
+            // stagger window PollOnceAsync computes (half the poll interval).
+            var orderedTimestamps = Codes
+                .Select(code => ticks.Single(t => t.Ticker == code).TimestampUtc)
+                .ToList();
+            for (var i = 1; i < orderedTimestamps.Count; i++)
+            {
+                Assert.True(orderedTimestamps[i] >= orderedTimestamps[i - 1]);
+            }
+            Assert.True(orderedTimestamps[^1] - orderedTimestamps[0] <= interval / 2);
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// Proves PollOnceAsync's stagger, not just that all 25 requests eventually arrive:
+    /// request *starts* are spread across the poll window rather than fired as one
+    /// simultaneous burst (the shape that drew sustained 429s in this slice's manual
+    /// rehearsal — see DependencyInjection's YahooUserAgent comment). ScriptedHandler
+    /// records each request's arrival against the same FakeTimeProvider the service's
+    /// Task.Delay(gap * index, timeProvider, ct) calls run on, so the recorded virtual
+    /// timestamps are exactly the delay boundaries PollOnceAsync computes — not a proxy
+    /// for them.
+    /// </summary>
+    [Fact]
+    public async Task Poll_request_starts_are_staggered_across_the_poll_window()
+    {
+        var handler = new ScriptedHandler(request => Json(ChartJson(10m)));
+        var (service, channel, clock, interval) = Build(handler);
+        handler.Clock = clock;
+
+        await StartAsync(service);
+        try
+        {
+            await AdvancePollUntilAsync(clock, interval, () => channel.Reader.Count >= Codes.Length);
+
+            Assert.Equal(Codes.Length, handler.RequestTimes.Count);
+
+            // PollOnceAsync's own formula: half the poll interval spread across every
+            // symbol, one gap per index. Recomputed here rather than imported so the test
+            // pins the contract (options in, gap out), not the implementation detail of
+            // how PollOnceAsync happens to compute it.
+            var expectedGap = interval / 2 / Codes.Length;
+
+            for (var i = 1; i < handler.RequestTimes.Count; i++)
+            {
+                Assert.Equal(expectedGap, handler.RequestTimes[i] - handler.RequestTimes[i - 1]);
             }
         }
         finally

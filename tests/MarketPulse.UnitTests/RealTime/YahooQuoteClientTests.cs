@@ -13,10 +13,24 @@ internal sealed class ScriptedHandler(params Func<HttpRequestMessage, HttpRespon
     public int Calls => _calls;
     public List<Uri?> Requests { get; } = [];
 
+    /// <summary>
+    /// Set by callers that care when each request started, not just how many arrived
+    /// (e.g. proving staggered starts) — the stagger under test is measured against
+    /// this <see cref="TimeProvider"/>, so recording against it rather than wall-clock
+    /// <see cref="DateTimeOffset.UtcNow"/> is what makes the recorded gaps deterministic.
+    /// Left null (falling back to <see cref="TimeProvider.System"/>) for every test that
+    /// doesn't care about request timing.
+    /// </summary>
+    public TimeProvider? Clock { get; set; }
+
+    /// <summary>Virtual-clock timestamp of each request, in arrival order.</summary>
+    public List<DateTimeOffset> RequestTimes { get; } = [];
+
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Requests.Add(request.RequestUri);
+        RequestTimes.Add((Clock ?? TimeProvider.System).GetUtcNow());
         var step = script[Math.Min(_calls, script.Length - 1)];
         _calls++;
         return Task.FromResult(step(request));
