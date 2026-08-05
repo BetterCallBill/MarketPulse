@@ -146,6 +146,16 @@ named in ADR-004's consequences, not built speculatively.
 | xUnit (integration, idempotency) | Same key replays the stored response without a second transaction; same key different body → 422; keys scoped per user (Alice's key does not replay for Bob); the race on a fresh key yields exactly one execution; `POST /alerts` honours the same header |
 | xUnit (integration, API) | Transaction flow over HTTP (buy, sell, portfolio reflects both); paging shape on transactions; empty portfolio 200; cross-user isolation extended to portfolio and transactions (the slice-2 suite's pattern) |
 
+*Amended 2026-08-05, during implementation.* Test (a)'s "units go negative" assertion proved
+unreachable: EF's owned-collection mapping writes `Holding.Units` as an absolute overwrite
+(`SET Units = @currentValue`), never a compounding decrement, so whichever racer commits last
+always lands in `[0, snapshot]` — a literal negative balance cannot occur for any choice of
+amounts. The lost update is instead proven by honest-replay rejection plus the erased winner
+effect: the second racer's exact trade, replayed against the real post-race state, is honestly
+rejected (`InsufficientHoldingsException`), which is what should have stopped it during the
+race; instead units and `Portfolio.Version` both show only one sell's effect. See
+`docs/TESTING.md`'s "Concurrency anomaly pair" section for the full account.
+
 ### Deliberately not tested
 
 Load on the idempotency table · retention/expiry (not built) · unrealised P&L (does not exist
