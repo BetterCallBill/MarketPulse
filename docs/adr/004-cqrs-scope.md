@@ -127,13 +127,20 @@ delivery, and the replayed body is served as `application/json` rather than the
 charset-qualified content type ASP.NET Core would have written on the original response. A
 client that depends on either of those on a replay will not get them.
 
-**Idempotency keys live forever, and a crash mid-claim orphans one.** `IdempotencyKeys` rows
-are never expired or purged in this slice — no retention job exists. A claim is inserted before
-the action runs and completed (or removed, on failure) after; a hard crash of the process in
-that narrow window leaves a claimed-but-never-completed row with no remedy but a fresh key,
-since nothing reclaims a stale in-flight claim either. Both retention and stale-claim reclaim
-are named here as one deferred operations concern, not built speculatively against a failure
-mode that has not yet cost anything.
+**Idempotency keys live forever, and either a crash mid-claim or a post-success completion
+failure orphans one.** `IdempotencyKeys` rows are never expired or purged in this slice — no
+retention job exists. A claim is inserted before the action runs; the action's own failure
+releases it (safe to retry under the same key), but once the action has succeeded, the claim
+is never removed again — only completed. If storing the response after success (serialization
+or the store write) throws, `IdempotencyFilter` logs a warning and leaves the claim exactly as
+claimed-but-not-completed rather than removing it: removing it would let an honest retry
+re-execute an action that already committed, turning a storage hiccup into a silent duplicate
+trade. A hard crash of the process between claim and completion produces the identical
+claimed-but-never-completed shape. Either way, the remedy is the same and already named here —
+a fresh key, since nothing reclaims a stale in-flight claim — and a retry under the *same* key
+degrades to 409 `idempotency-in-flight`, never a duplicate execution. Both retention and
+stale-claim reclaim are named here as one deferred operations concern, not built speculatively
+against a failure mode that has not yet cost anything.
 
 **The isolation-level demonstration lives in tests, not in production transaction options.**
 No portfolio write runs at `Serializable`; every request runs at SQL Server's default,
