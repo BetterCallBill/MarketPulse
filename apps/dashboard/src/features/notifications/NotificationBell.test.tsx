@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { HttpResponse, http } from 'msw';
+import { HttpResponse, delay, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { NotificationBell } from './NotificationBell';
@@ -85,6 +85,37 @@ describe('NotificationBell', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /notifications/i })).not.toHaveTextContent('1'),
     );
+  });
+
+  it('marks rows read once data arrives, even if the panel was opened before the fetch resolved', async () => {
+    const readIds: string[] = [];
+    server.use(
+      // The initial fetch resolves after the click below, so the panel opens against
+      // an empty pre-fetch array — the race this test exists to catch.
+      http.get('http://localhost:5100/api/v1/notifications', async () => {
+        await delay(50);
+        return HttpResponse.json([unread, read]);
+      }),
+      http.post('http://localhost:5100/api/v1/notifications/:id/read', ({ params }) => {
+        readIds.push(String(params['id']));
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderBell();
+
+    await userEvent.click(await screen.findByRole('button', { name: /notifications/i }));
+
+    // While the fetch is still in flight, the panel must say so — not claim there's
+    // nothing yet, which would be false.
+    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+    expect(screen.queryByText(/nothing yet/i)).not.toBeInTheDocument();
+
+    expect(
+      await screen.findByText('IVV crossed above $60.00 — $61.20'),
+    ).toBeInTheDocument();
+
+    await waitFor(() => expect(readIds).toEqual(['n1']));
   });
 
   it('renders nothing without a session', async () => {

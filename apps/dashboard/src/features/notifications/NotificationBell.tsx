@@ -11,7 +11,7 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const signedIn = Boolean(session);
 
-  const { data: notifications } = useNotifications(signedIn);
+  const { data: notifications, isPending } = useNotifications(signedIn);
   useNotificationStream(signedIn);
 
   if (!session) return null;
@@ -23,7 +23,9 @@ export function NotificationBell() {
       <Button variant="ghost" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         Notifications <Badge count={unread} label="unread notifications" />
       </Button>
-      {open && <NotificationsPanel notifications={notifications ?? []} />}
+      {open && (
+        <NotificationsPanel notifications={notifications ?? []} isPending={isPending} />
+      )}
     </div>
   );
 }
