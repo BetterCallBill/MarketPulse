@@ -104,6 +104,31 @@ describe('AlertCell', () => {
     expect(screen.getByRole('button', { name: 'Re-arm alert for IVV' })).toBeInTheDocument();
   });
 
+  it('deletes a rule and swaps back to the create form', async () => {
+    // Stateful handlers, mirroring the create-and-swap test above: after the DELETE
+    // succeeds, the invalidation-triggered refetch must return an empty list for the
+    // cell to swap back from status to the create form.
+    let deletedId: string | undefined;
+    let deleted = false;
+    server.use(
+      http.get('http://localhost:5100/api/v1/alerts', () =>
+        HttpResponse.json(deleted ? [] : [activeRule]),
+      ),
+      http.delete('http://localhost:5100/api/v1/alerts/:id', ({ params }) => {
+        deletedId = String(params['id']);
+        deleted = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderCell();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove alert for IVV' }));
+
+    expect(await screen.findByLabelText('Alert threshold for IVV')).toBeInTheDocument();
+    expect(deletedId).toBe('a1');
+  });
+
   it('surfaces the server message when creation is rejected', async () => {
     server.use(
       http.post('http://localhost:5100/api/v1/alerts', () =>
