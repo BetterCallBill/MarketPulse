@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using MarketPulse.Application.Portfolios;
 using MarketPulse.Application.Watchlists;
 using MarketPulse.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
@@ -70,6 +71,22 @@ public class CrossUserIsolationTests(SqlServerFixture fixture) : IAsyncLifetime
 
         var alicesList = await _alice.GetFromJsonAsync<WatchlistDto>("/api/v1/watchlist");
         Assert.Contains(alicesList!.Items, i => i.Ticker == "VAS");
+    }
+
+    [Fact]
+    public async Task Bob_cannot_see_a_trade_Alice_recorded()
+    {
+        await _alice.PostAsJsonAsync(
+            "/api/v1/portfolio/transactions",
+            new { Ticker = "IVV", Side = "Buy", Units = 10m, Price = 60m, OccurredUtc = (DateTimeOffset?)null });
+
+        var bobsPortfolio = await _bob.GetFromJsonAsync<PortfolioDto>("/api/v1/portfolio");
+        Assert.NotNull(bobsPortfolio);
+        Assert.Empty(bobsPortfolio!.Holdings);
+
+        var bobsTransactions = await _bob.GetFromJsonAsync<List<TransactionDto>>(
+            "/api/v1/portfolio/transactions");
+        Assert.Empty(bobsTransactions!);
     }
 
     [Fact]

@@ -93,8 +93,8 @@ src/
 ```
 
 - **Dependency rule:** all dependencies point inward; Domain knows nothing about Infrastructure
-- **CQRS via MediatR** for Portfolio commands/queries — with [ADR-004](docs/adr/004-cqrs-scope.md) honestly documenting where CQRS was overkill and rolled back
-- **DDD-lite aggregates:** `Portfolio`, `Watchlist` enforce invariants; domain events drive the outbox
+- **CQRS via MediatR** for Portfolio commands/queries over one store — [ADR-004](docs/adr/004-cqrs-scope.md) scopes it deliberately (no separate read model, no event sourcing) and names what a fuller CQRS would have cost
+- **DDD-lite aggregates:** `Portfolio`, `AlertRule`, `Watchlist` enforce invariants; only `AlertRule` raises domain events, which drive the outbox — `Portfolio` deliberately has none in this slice (ADR-004)
 
 ### Frontend — Feature-sliced monorepo
 
@@ -138,7 +138,7 @@ packages/emitter        # Standalone ES module event emitter
 | Feature | Description |
 |---|---|
 | **Live price board** | Real-time grid via SignalR/WebSocket; server-side ingestion fans out price ticks |
-| **Watchlist & mock portfolio** | CRUD watchlist, simulated buy/sell with idempotency keys, P&L calculation |
+| **Watchlist & portfolio** | CRUD watchlist; portfolio backend (5a) — buy/sell transactions with idempotency keys, average-cost basis, realised P&L; dashboard surface and client-side unrealised P&L land in 5b |
 | **Price alerts** | Threshold alerts evaluated server-side by the Alerts microservice via RabbitMQ |
 | **Historical charts** | Lazy-loaded charting; Dapper-backed history queries with `stale-while-revalidate` caching |
 | **Portfolio notes** | Rich-text notes per holding, sanitised with DOMPurify |
@@ -191,7 +191,7 @@ packages/emitter        # Standalone ES module event emitter
 - **DI & lifetimes:** all three lifetimes used deliberately; [ADR-005](docs/adr/005-captive-dependency-postmortem.md) documents an engineered captive-dependency bug and its fix
 - **Options pattern:** strongly-typed feed configuration with validation on startup
 - **Minimal APIs vs controllers:** Market Data module uses minimal APIs, Portfolio uses controllers — both styles live side by side for direct comparison
-- **Filters:** validation action filters on Portfolio endpoints
+- **Filters:** `IdempotencyFilter`, a `ServiceFilter` claiming a stored key before the action runs, on `POST /portfolio/transactions` and `POST /alerts` — request validation itself runs through FluentValidation in the MediatR pipeline (`ValidationBehaviour<,>`), not an action filter
 - **Hosted/background services:** `PriceIngestionService` (`BackgroundService`) and the outbox dispatcher
 
 #### 5. Frontend framework depth (React)
@@ -229,7 +229,7 @@ packages/emitter        # Standalone ES module event emitter
 - **EF Core:** change tracking, migrations, query translation; a **deliberately created then fixed N+1** documented in [ADR-006](docs/adr/006-n-plus-one-postmortem.md)
 - **Dapper trade-off:** read-heavy price-history queries on Dapper, with the EF-vs-Dapper decision written up
 - **Indexing & execution plans:** covering indexes with **before/after execution plans** committed to `docs/sql/`
-- **Transactions & isolation:** serializable vs read-committed demonstrated in the mock order placement flow, with anomaly tests
+- **Transactions & isolation:** the serializable-vs-read-committed trade-off is decided and demonstrated, not run in production — `PortfolioConcurrencyAnomalyTests` reproduces the read-committed lost-update anomaly on concurrent portfolio trades with the concurrency token bypassed, then shows the token turning the same race into a 409; [ADR-004](docs/adr/004-cqrs-scope.md) records why `RowVersion` won over serializable transactions
 
 ### Tier 3 — Cross-cutting engineering
 
@@ -248,7 +248,7 @@ packages/emitter        # Standalone ES module event emitter
 
 **Where:** the entire system shape + `docs/adr/`
 
-- **Backend:** Clean/Onion layering, CQRS via MediatR (with an honest "where it was overkill" ADR), DDD-lite aggregates, SOLID and dependency inversion enforced by project references
+- **Backend:** Clean/Onion layering, CQRS via MediatR scoped deliberately to commands/queries over one store ([ADR-004](docs/adr/004-cqrs-scope.md) names the fuller alternatives — a read store, event sourcing — and why each was rejected), DDD-lite aggregates, SOLID and dependency inversion enforced by project references
 - **The flagship decision:** modular monolith + one extracted microservice — both sides of the trade-off defensible from experience
 - **Frontend:** feature-sliced monorepo, Storybook design system, API-layer package, a deliberate state architecture with one layer rather than several — server cache only, a rejected second layer documented in [ADR-007](docs/adr/007-state-architecture.md)
 - **Micro-frontends:** Module Federation spike extracting the alerts UI — minimal but real
@@ -309,7 +309,7 @@ packages/emitter        # Standalone ES module event emitter
   1. The N+1 hunt (data access + measurement)
   2. The captive-dependency bug (DI depth)
   3. The queue-outage chaos test → *"tell me about a production issue"*
-  4. The CQRS-was-overkill rollback (judgement, not dogma)
+  4. The CQRS-scope decision — one store, no read model, no event sourcing (judgement, not dogma)
   5. The blue-green deployment setup (DevOps)
   6. The performance measurement log (measure-first mindset)
 

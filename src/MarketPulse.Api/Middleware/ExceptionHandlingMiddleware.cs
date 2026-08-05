@@ -1,6 +1,8 @@
 using FluentValidation;
 using MarketPulse.Domain.Exceptions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 
 namespace MarketPulse.Api.Middleware;
 
@@ -23,6 +25,23 @@ public sealed class ExceptionHandlingMiddleware(
             }
 
             await WriteAsync(context, ex.StatusCode, ex.ErrorCode, ex.Message);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Two writes raced the same portfolio (or rule) and this one lost. The client
+            // re-reads and retries; its sell may now legitimately fail validation instead.
+            await WriteAsync(context, StatusCodes.Status409Conflict,
+                "concurrent-update", "The resource was modified concurrently. Retry.");
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            // Two racing first-ever trades for the same user both take the implicit
+            // portfolio-creation path (no Portfolio row yet, no RowVersion to guard it);
+            // the loser hits IX_Portfolios_UserId's unique index rather than a
+            // concurrency-token mismatch, but the remedy is identical: retry, and the
+            // portfolio the winner already created will be found instead.
+            await WriteAsync(context, StatusCodes.Status409Conflict,
+                "concurrent-update", "The resource was modified concurrently. Retry.");
         }
         catch (UnauthorizedAccessException)
         {

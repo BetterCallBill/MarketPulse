@@ -17,13 +17,29 @@ public static class InfrastructureServiceCollectionExtensions
     public static IServiceCollection AddPersistence(
         this IServiceCollection services, string connectionString)
     {
-        services.AddDbContext<MarketPulseDbContext>(o => o.UseSqlServer(connectionString));
+        // Both calls configure the same connection. Each of AddDbContextFactory and
+        // AddDbContext contributes its own IDbContextOptionsConfiguration<TContext> entry
+        // to an IEnumerable EF Core aggregates when it lazily builds DbContextOptions — it
+        // is additive, not deduplicated by TryAdd, so both entries exist regardless of call
+        // order. IDbContextFactory<MarketPulseDbContext> is a singleton and resolves that
+        // collection from the root container; if either entry were Scoped (AddDbContext's
+        // default), the aggregate IEnumerable becomes unresolvable from the root and every
+        // first call to CreateDbContext throws "Cannot resolve scoped service ... from root
+        // provider". Passing optionsLifetime: Singleton to AddDbContext keeps every entry in
+        // that collection singleton while leaving MarketPulseDbContext itself scoped (its
+        // default contextLifetime) — which the request-scoped repositories still need. See
+        // IdempotencyStore's doc comment for why the factory exists at all.
+        services.AddDbContextFactory<MarketPulseDbContext>(o => o.UseSqlServer(connectionString));
+        services.AddDbContext<MarketPulseDbContext>(
+            o => o.UseSqlServer(connectionString), optionsLifetime: ServiceLifetime.Singleton);
         services.AddScoped<IWatchlistRepository, WatchlistRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IAlertRuleRepository, AlertRuleRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IPortfolioRepository, PortfolioRepository>();
         services.AddScoped<IOutbox, Outbox>();
+        services.AddScoped<IIdempotencyStore, IdempotencyStore>();
         return services;
     }
 

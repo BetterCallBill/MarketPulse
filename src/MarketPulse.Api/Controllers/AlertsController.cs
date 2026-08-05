@@ -1,3 +1,4 @@
+using MarketPulse.Api.Filters;
 using MarketPulse.Application.Alerts;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -15,6 +16,7 @@ public sealed class AlertsController(ISender sender) : ControllerBase
         Ok(await sender.Send(new GetAlertRulesQuery(), ct));
 
     [HttpPost]
+    [ServiceFilter(typeof(IdempotencyFilter))]
     public async Task<ActionResult<AlertRuleDto>> Create(
         [FromBody] CreateAlertRuleCommand command, CancellationToken ct)
     {

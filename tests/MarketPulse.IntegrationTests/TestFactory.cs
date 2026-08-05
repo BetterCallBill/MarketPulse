@@ -47,7 +47,15 @@ public static class TestFactory
                 var descriptor = services.Single(
                     d => d.ServiceType == typeof(DbContextOptions<MarketPulseDbContext>));
                 services.Remove(descriptor);
-                services.AddDbContext<MarketPulseDbContext>(
+
+                // Singleton, not the AddDbContext default of Scoped: AddPersistence also
+                // registers IDbContextFactory<MarketPulseDbContext> (itself a singleton, for
+                // IdempotencyStore's own-context-per-call seam) which depends on this same
+                // options service. Re-adding it here as Scoped — which plain AddDbContext
+                // would do — would leave that singleton factory depending on a scoped
+                // service, and ASP.NET Core's startup validation rejects that captive
+                // dependency before a single request runs.
+                services.AddDbContextFactory<MarketPulseDbContext>(
                     o => o.UseSqlServer(fixture.ConnectionString));
             });
         });

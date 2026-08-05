@@ -4,6 +4,7 @@ using MarketPulse.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MarketPulse.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(MarketPulseDbContext))]
-    partial class MarketPulseDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260805030720_Slice5aPortfolio")]
+    partial class Slice5aPortfolio
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -73,46 +76,6 @@ namespace MarketPulse.Infrastructure.Persistence.Migrations
                     b.HasIndex("Ticker", "Status");
 
                     b.ToTable("AlertRules");
-                });
-
-            modelBuilder.Entity("MarketPulse.Domain.Entities.IdempotencyKey", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("CreatedUtc")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("Endpoint")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
-
-                    b.Property<string>("RequestHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<string>("ResponseBody")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("ResponseStatusCode")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "Endpoint", "Key")
-                        .IsUnique();
-
-                    b.ToTable("IdempotencyKeys");
                 });
 
             modelBuilder.Entity("MarketPulse.Domain.Entities.Notification", b =>
@@ -547,15 +510,6 @@ namespace MarketPulse.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("MarketPulse.Domain.Entities.AlertRule", b =>
-                {
-                    b.HasOne("MarketPulse.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("MarketPulse.Domain.Entities.IdempotencyKey", b =>
                 {
                     b.HasOne("MarketPulse.Domain.Entities.User", null)
                         .WithMany()
