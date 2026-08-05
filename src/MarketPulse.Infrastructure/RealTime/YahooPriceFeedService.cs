@@ -49,7 +49,7 @@ public sealed class YahooPriceFeedService(
 
     private async Task PollOnceAsync(string[] codes, CancellationToken ct)
     {
-        // Concurrent within the poll, bounded by the symbol count (~8) — no throttling
+        // Concurrent within the poll, bounded by the symbol count (~25) — no throttling
         // machinery for a workload this small.
         var polls = codes.Select(async code =>
         {
@@ -72,7 +72,7 @@ public sealed class YahooPriceFeedService(
             }
             catch (Polly.CircuitBreaker.BrokenCircuitException)
             {
-                // The breaker already announced itself once at Warning (OnOpened); eight
+                // The breaker already announced itself once at Warning (OnOpened); twenty-five
                 // symbols repeating it every poll would be noise. Debug keeps the trace.
                 logger.LogDebug("Circuit open; skipped {Code} this poll.", code);
             }
