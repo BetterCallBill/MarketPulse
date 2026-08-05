@@ -77,22 +77,24 @@ because it is a real example of the risk decision 1 below accepts on purpose.
    an already-open breaker logs at Debug, so 25 symbols failing the same open circuit in one
    poll produce one warning, not 25.
 
-6. **20-second polling, per-symbol concurrent within a poll.** `YahooPriceFeedService` fans
-   one request per seed symbol out concurrently every `PollInterval` (default 20s, no
+6. **60-second polling, per-symbol concurrent within a poll.** `YahooPriceFeedService` fans
+   one request per seed symbol out concurrently every `PollInterval` (default 60s, no
    throttling machinery — the fan-out is bounded by the symbol count on its own). The 25
-   seeded reference tickers (`SeedData.ReferenceTickers`) at one request each every 20
-   seconds is 3 polls a minute × 25 symbols = **75 requests a minute** against a keyless
+   seeded reference tickers (`SeedData.ReferenceTickers`) at one request each every 60
+   seconds is 1 poll a minute × 25 symbols = **25 requests a minute** against a keyless
    public endpoint — a request rate an ordinary browser session against the same site would
    produce without particular effort, and nothing on a feed that is already ~20 minutes
    delayed; polling faster would buy no freshness. (An earlier design pass estimated this
-   against a smaller assumed symbol count; the number above is the actual seed set the
-   service reads at startup, and is the number that governs both the rate-limiting risk and
-   the breaker's sample size.)
+   against a smaller assumed symbol count [~8] at a 20s cadence, which would have been 75
+   requests a minute against the actual 25-symbol seed set — triple the intended
+   politeness. Caught during implementation fact-checking and corrected by moving the
+   cadence to 60s rather than trimming the seed set; see the spec's "Amended during
+   implementation" note.)
 
 7. **The in-memory rule cache stays deferred.** ADR-009 named a per-tick rule query
    (`AlertRule`s re-queried on every tick, four times a second against the fake) as the
    first thing to break under a real feed, with an in-memory cache invalidated on write as
-   the named remedy. The real feed polls at 20s intervals — *fewer* ticks reach the alerts
+   the named remedy. The real feed polls at 60s intervals — *fewer* ticks reach the alerts
    worker than the 1-second fake ever produced, so the load this slice was expected to add
    pressure to instead got lighter. Building the cache now would resolve a pressure
    measurement says does not exist; it stays deferred, re-evaluated at slice 7 (history) or
@@ -155,11 +157,14 @@ no single attempt — retried or not — can hang past `AttemptTimeout`, which i
 hung upstream from stacking polls: without it, a poll whose HTTP call never returns would
 still be running when the next `PeriodicTimer` tick fires.
 
-**20-second polling.** The feed itself is ~20 minutes delayed; polling every second would
+**60-second polling.** The feed itself is ~20 minutes delayed; polling every second would
 buy no freshness a human could perceive and would only raise the request rate against a
-keyless endpoint for no benefit. 20 seconds keeps the request volume (decision 6) modest
-while producing a tick cadence still fast enough that the dashboard, the alerts worker, and
-the staleness thresholds all continue to behave as designed.
+keyless endpoint for no benefit. 60 seconds keeps the request volume (decision 6) to a
+genuinely polite 25 requests/minute against the actual 25-symbol seed set, while producing
+a tick cadence still fast enough that the dashboard and the alerts worker continue to
+behave as designed. The dashboard's staleness threshold does not get to stay implicit at
+this cadence, though — see the consequence below; `STALE_AFTER_MS` was retuned alongside
+this decision rather than left pointing at the fake's 1-second rhythm.
 
 ## Rejected alternatives
 
@@ -206,10 +211,23 @@ handles. This is the intended behaviour, not a gap.
 
 **The request-rate arithmetic is tied to the seed ticker count, not a fixed assumption.**
 `YahooPriceFeedService` polls every symbol in `SeedData.ReferenceTickers` — 25 today — so
-the 75-requests-a-minute figure in decision 6 moves if that list grows or shrinks. Nothing
+the 25-requests-a-minute figure in decision 6 moves if that list grows or shrinks. Nothing
 in the pipeline enforces a ceiling on that count; a much larger seed set would eventually
 need either a longer poll interval, a per-poll batch limit, or revisiting the endpoint
 choice this ADR made.
+
+**The dashboard's staleness threshold is coupled to `PollInterval`, not independent of
+it.** `STALE_AFTER_MS` (`apps/dashboard/src/features/prices/streamReducer.ts`) means
+"later than the slowest expected source cadence would explain." It was `10_000`ms, a value
+tuned for `FakeTickService`'s 1-second walk and never revisited when this slice introduced
+a real, much slower cadence; at any `PollInterval` above 10s it would have marked
+on-schedule live prices stale between polls, on a schedule, by design of the mismatch — not
+a bug in the reducer, a stale constant. It is now `180_000`ms (3 minutes, 3x the 60s
+default `PollInterval`), retuned alongside decision 6 rather than left as a silent
+assumption. This is a real, if narrow, coupling this ADR did not originally name: a future
+change to `PollInterval` should re-examine `STALE_AFTER_MS` rather than assume the
+dashboard's staleness UI is cadence-agnostic just because "dashboard changes of any kind"
+was out of this slice's scope for everything else.
 
 **The circuit breaker's tuning is calibrated in polls, not raw requests.**
 `MinimumThroughput` 6 over a 90-second `SamplingDuration` is tuned (per
