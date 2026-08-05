@@ -6,7 +6,7 @@
     "e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "echo \"e2e runs via pnpm e2e\" && exit 0"
+    "test": "echo 'e2e tests run via: pnpm exec playwright test'"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
