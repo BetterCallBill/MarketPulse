@@ -1,4 +1,4 @@
-import { Alert, Button } from '@marketpulse/ui';
+import { Alert, Button, TextField } from '@marketpulse/ui';
 import { useRef, useState, type FormEvent } from 'react';
 import styles from './TradeForm.module.css';
 import { useRecordTransaction } from './usePortfolio';
@@ -36,7 +36,22 @@ export function TradeForm() {
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (ticker.trim() === '' || Number(units) <= 0 || Number(price) <= 0) return;
+    // The disabled attribute on the submit button is UI; this is the invariant it stands
+    // for — a second submit event (e.g. a stray Enter) must not fire a second mutation
+    // while one is already in flight.
+    if (record.isPending) return;
+
+    const unitsValue = Number(units);
+    const priceValue = Number(price);
+    if (
+      ticker.trim() === '' ||
+      !Number.isFinite(unitsValue) ||
+      unitsValue <= 0 ||
+      !Number.isFinite(priceValue) ||
+      priceValue <= 0
+    ) {
+      return;
+    }
 
     // A new submission is new intent: fresh key, whatever happened before.
     keyRef.current = crypto.randomUUID();
@@ -48,7 +63,13 @@ export function TradeForm() {
     if (keyRef.current) submit(keyRef.current);
   }
 
-  const retryable = record.isError && record.error.status === 409;
+  // Retry with the same key whenever the outcome is unknown or explicitly retryable: a 409
+  // (concurrent update, or the key already in flight) is the server-known ambiguous case;
+  // an error with no HTTP status is a network failure — the client never learned whether the
+  // request landed, which is exactly the ambiguous outcome the idempotency key exists for.
+  // A definitive 4xx/5xx-with-status is not retryable — resending would just repeat it.
+  const retryable =
+    record.isError && (record.error.status === 409 || record.error.status === undefined);
 
   return (
     <section aria-labelledby="trade-heading">
@@ -56,43 +77,57 @@ export function TradeForm() {
         Record a trade
       </h3>
       <form className={styles.form} onSubmit={handleSubmit}>
-        <input
-          className={styles.field}
-          aria-label="Ticker"
-          value={ticker}
-          onChange={(e) => setTicker(e.target.value)}
-          maxLength={8}
-          required
-        />
-        <select
-          className={styles.field}
-          aria-label="Side"
-          value={side}
-          onChange={(e) => setSide(e.target.value as 'Buy' | 'Sell')}
-        >
-          <option value="Buy">Buy</option>
-          <option value="Sell">Sell</option>
-        </select>
-        <input
-          className={styles.field}
-          aria-label="Units"
-          type="number"
-          step="0.000001"
-          min="0.000001"
-          value={units}
-          onChange={(e) => setUnits(e.target.value)}
-          required
-        />
-        <input
-          className={styles.field}
-          aria-label="Price"
-          type="number"
-          step="0.01"
-          min="0.01"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          required
-        />
+        <div className={styles.textField}>
+          <TextField
+            id="trade-ticker"
+            label="Ticker"
+            value={ticker}
+            onChange={(e) => setTicker(e.target.value)}
+            maxLength={8}
+            required
+          />
+        </div>
+        {/* No Select primitive exists yet in packages/ui, so this is a plain label + select
+            given the same visible-label treatment as TextField rather than an aria-label —
+            consistency of visible labels is the point, not which element supplies it. */}
+        <div className={styles.selectField}>
+          <label className={styles.selectLabel} htmlFor="trade-side">
+            Side
+          </label>
+          <select
+            id="trade-side"
+            className={styles.select}
+            value={side}
+            onChange={(e) => setSide(e.target.value as 'Buy' | 'Sell')}
+          >
+            <option value="Buy">Buy</option>
+            <option value="Sell">Sell</option>
+          </select>
+        </div>
+        <div className={styles.textField}>
+          <TextField
+            id="trade-units"
+            label="Units"
+            type="number"
+            step="0.000001"
+            min="0.000001"
+            value={units}
+            onChange={(e) => setUnits(e.target.value)}
+            required
+          />
+        </div>
+        <div className={styles.textField}>
+          <TextField
+            id="trade-price"
+            label="Price"
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            required
+          />
+        </div>
         <Button type="submit" disabled={record.isPending}>
           Record trade
         </Button>

@@ -111,4 +111,28 @@ describe('TradeForm', () => {
     expect(screen.getByLabelText('Ticker')).toBeInvalid();
     expect(seenKeys).toHaveLength(0);
   });
+
+  it('offers Retry with the same key after a network failure (ambiguous outcome)', async () => {
+    let calls = 0;
+    server.use(
+      http.post('http://localhost:5100/api/v1/portfolio/transactions', ({ request }) => {
+        calls += 1;
+        if (calls === 1) {
+          seenKeys.push(request.headers.get('Idempotency-Key') ?? '(none)');
+          return HttpResponse.error();
+        }
+        seenKeys.push(request.headers.get('Idempotency-Key') ?? '(none)');
+        return HttpResponse.json({ holdings: [], totalRealisedPnL: 0 }, { status: 201 });
+      }),
+    );
+
+    renderForm();
+
+    await fillAndSubmit();
+    await userEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+
+    // Same submission, so the retry after a network failure reuses the same key.
+    await waitFor(() => expect(seenKeys).toHaveLength(2));
+    expect(seenKeys[1]).toBe(seenKeys[0]);
+  });
 });
