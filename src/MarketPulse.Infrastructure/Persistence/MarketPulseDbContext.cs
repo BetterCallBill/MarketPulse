@@ -13,6 +13,8 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<Portfolio> Portfolios => Set<Portfolio>();
+    public DbSet<Transaction> Transactions => Set<Transaction>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -166,6 +168,58 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
             e.HasIndex(x => x.OccurredUtc)
                 .HasFilter("[DispatchedUtc] IS NULL")
                 .HasDatabaseName("IX_OutboxMessages_Pending");
+        });
+
+        b.Entity<Portfolio>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.UserId).IsUnique();
+            e.Property(x => x.RowVersion).IsRowVersion();
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Same shape as Watchlist: computed property ignored, field-mapped owned set.
+            e.Ignore(x => x.Holdings);
+
+            e.OwnsMany<Holding>("_holdings", holdings =>
+            {
+                holdings.ToTable("Holdings");
+                holdings.WithOwner().HasForeignKey(x => x.PortfolioId);
+                holdings.HasKey(x => x.Id);
+                holdings.Property(x => x.Id).ValueGeneratedNever();
+                holdings.Property(x => x.Ticker).HasMaxLength(8).IsRequired();
+                holdings.Property(x => x.Units).HasPrecision(18, 6);
+                holdings.Property(x => x.AverageCost).HasPrecision(18, 4);
+                holdings.Property(x => x.RealisedPnL).HasPrecision(18, 4);
+                holdings.HasIndex(x => new { x.PortfolioId, x.Ticker }).IsUnique();
+
+                // Portfolio.RowVersion alone does not cover this: a buy/sell only mutates a
+                // Holding row, in the separate Holdings table, so SaveChanges never issues an
+                // UPDATE against Portfolios and that token is never checked. Portfolio's own
+                // doc comment states the invariant this exists to enforce ("two concurrent
+                // sells of the same holding must not oversell") — a shadow rowversion here,
+                // on the row that actually changes, is what makes the loser's UPDATE match no
+                // row. Schema-neutral like Watchlist's ValueGeneratedNever: this is a
+                // concurrency token, not a Domain-visible property, so it stays a shadow
+                // property rather than a field on Holding.
+                holdings.Property<byte[]>("RowVersion").IsRowVersion().IsRequired();
+            });
+        });
+
+        b.Entity<Transaction>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.Ticker).HasMaxLength(8).IsRequired();
+            e.Property(x => x.Side).HasConversion<string>().HasMaxLength(8).IsRequired();
+            e.Property(x => x.Units).HasPrecision(18, 6);
+            e.Property(x => x.Price).HasPrecision(18, 4);
+
+            // The history query: one portfolio's trades, newest first.
+            e.HasIndex(x => new { x.PortfolioId, x.OccurredUtc });
+
+            e.HasOne<Portfolio>().WithMany().HasForeignKey(x => x.PortfolioId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
