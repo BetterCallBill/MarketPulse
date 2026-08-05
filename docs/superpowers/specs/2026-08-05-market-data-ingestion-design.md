@@ -30,7 +30,7 @@ to say exactly which of its failure modes we tolerate and how.
 | Feed | **Yahoo Finance's public quote endpoint** (batched multi-symbol, ~20-min-delayed ASX data, no key) | Keyed free tiers (Finnhub, Twelve Data) are official but patchy on ASX coverage, add secrets management, and their quotas constrain cadence. Paid real-time ASX data is out of all proportion to a portfolio project. The unofficial upstream is not a weakness to hide but the ADR's premise: the resilience layer exists precisely because the API is unversioned and unowed |
 | Source selection | **`MarketData:Source = Fake \| Yahoo`, bound options, `Fake` the default** | Replacing the fake outright breaks e2e determinism (the journeys assert on prices flowing within seconds) and offline development. Auto-detection (try Yahoo, fall back to fake) was rejected as the dishonest failure mode below in disguise |
 | Feed failure at runtime | **Prices go stale, truthfully. No fallback to the fake** | Silently substituting a random walk for real prices when the upstream dies is the one unacceptable failure mode: the UI would keep looking alive while showing invented numbers a user might trade on. The staleness treatment the dashboard already has (`isStale`, em-dashes, the reconnecting pattern) is the designed surface for "the data stopped"; ADR-010 records this as a product decision, not an accident |
-| Cadence | **One batched request for all seeded tickers every 15s (configurable)** | Per-symbol requests multiply calls for nothing (Yahoo's endpoint is multi-symbol). Faster polling buys no freshness on a ~20-min-delayed feed and is impolite to an unofficial API. 15s for ~8 symbols is 4 requests/minute |
+| Cadence | **Per-symbol requests, concurrent within a poll, every 20s (configurable)** *(amended — see The poller)* | Batched multi-symbol was the first choice, but Yahoo's batch endpoint is crumb-gated (see the amendment); the keyless per-symbol endpoint at 20s is ~24 requests/minute — still polite, and faster polling buys no freshness on a ~20-min-delayed feed |
 | Market closed | **Broadcast every successful poll as a tick, unchanged price, neutral direction** | Suppressing unchanged prices means every ASX evening the board decays to stale and the "live" claim quietly becomes false for 18 hours a day. A repeated last-trade price is real data, honestly timestamped by the poll |
 | Resilience mechanism | **`HttpClientFactory` + `Microsoft.Extensions.Http.Resilience` pipeline: retry with jitter, then circuit breaker** | Hand-rolled Polly policies wired around a static `HttpClient` re-implement what the resilience extensions ship tested; the README's claim is "Polly retry + circuit breaker", which this is (the extensions are Polly v8 under the hood), with the pipeline declared beside the client registration where the ADR can point at it |
 | In-memory rule cache | **Still deferred, now with better evidence** | ADR-009 names the cache as the remedy "when a real feed breaks" the per-tick rule query. The real feed polls at 15s — *fewer* ticks than the 1s fake, so the load got lighter, not heavier. Building the cache now would be resolving a pressure that measurement says does not exist. Re-evaluate at slice 7 (history) or if cadence ever drops below seconds |
@@ -65,11 +65,21 @@ dashboard changes of any kind (staleness UI already exists).
 
 ### The poller
 
+*Amended 2026-08-05, before planning.* The batched `v7/finance/quote` endpoint this spec
+first named has required a cookie-and-crumb handshake since 2023; implementing that dance
+against an unofficial API is exactly the fragility this slice refuses. The keyless, stable
+surface is `v8/finance/chart/{symbol}` — per-symbol. The poller therefore fans one request
+per seed symbol concurrently within a poll (bounded by the symbol count, ~8), and the
+default cadence moves to 20s: ~24 requests/minute, still polite, still nothing on a ~20-min
+delayed feed. Every other decision stands; the cadence row's arithmetic updates, its
+reasoning does not.
+
 `YahooPriceFeedService` runs the fake's exact loop shape (`PeriodicTimer`, cancellation via
 the stopping token, log-and-continue):
 
-1. Every `PollInterval` (default 15s), request all seed symbols in one call:
-   `GET /v7/finance/quote?symbols=IVV.AX,NDQ.AX,…` on the configured base URL.
+1. Every `PollInterval` (default 20s), request each seed symbol concurrently:
+   `GET /v8/finance/chart/{symbol}?interval=1d&range=1d` on the configured base URL, taking
+   `chart.result[0].meta.regularMarketPrice`.
 2. Parse with `System.Text.Json` DTOs. Per symbol: map back to the ASX code, validate the
    price is positive and the symbol is one we asked for; write one `PriceTick` per valid
    quote with `DateTimeOffset.UtcNow` (poll time, not the feed's delayed trade time — the
