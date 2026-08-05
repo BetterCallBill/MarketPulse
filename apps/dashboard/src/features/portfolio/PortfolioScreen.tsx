@@ -1,3 +1,4 @@
+import { HoldingsTable } from './HoldingsTable';
 import styles from './PortfolioScreen.module.css';
 
 export function PortfolioScreen() {
@@ -6,7 +7,8 @@ export function PortfolioScreen() {
       <h2 id="portfolio-heading" className={styles.heading}>
         Portfolio
       </h2>
-      {/* Holdings, TradeForm, History land in Tasks 4–6 */}
+      <HoldingsTable />
+      {/* TradeForm, History land in Tasks 5–6 */}
     </section>
   );
 }

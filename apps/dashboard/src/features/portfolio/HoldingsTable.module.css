@@ -1,0 +1,50 @@
+.heading {
+  margin: 0 0 var(--mp-space-2);
+  font-size: 1rem;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.table th,
+.table td {
+  padding: var(--mp-space-2) var(--mp-space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--mp-border-subtle);
+}
+
+.table tfoot th,
+.table tfoot td {
+  border-bottom: none;
+  font-weight: 600;
+}
+
+.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ticker {
+  font-weight: 600;
+}
+
+.table [data-tone='up'] {
+  color: var(--mp-price-up);
+}
+
+.table [data-tone='down'] {
+  color: var(--mp-price-down);
+}
+
+.empty {
+  margin: 0;
+  color: var(--mp-text-muted);
+  padding: var(--mp-space-3);
+}
