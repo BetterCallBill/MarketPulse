@@ -133,7 +133,7 @@ packages/emitter        # Standalone ES module event emitter
   `Notifications.MessageId`, enforced by the database rather than a read-then-write that would
   race itself; redelivery is safe. The Alerts worker needs no message-ID dedupe of its own: a
   redelivered tick finds the rule no longer `Active` and does nothing
-- **Resilience:** Polly retry + circuit breaker around the external market data feed (**slice 6, not yet built** — ticks still come from `FakeTickService`) and a chaos test that kills RabbitMQ mid-flow and verifies recovery (**slice 4b, not yet built**)
+- **Resilience:** Polly retry + circuit breaker around the external market data feed (**slice 6, not yet built** — ticks still come from `FakeTickService`) and a chaos test (`ChaosTests.cs`) that stops RabbitMQ mid-flow — after a rule fires, before its outbox row dispatches — and proves the row survives and dispatches exactly once after the broker restarts
 
 ---
 
@@ -283,7 +283,7 @@ packages/emitter        # Standalone ES module event emitter
 - **Outbox pattern:** domain events persisted transactionally, relayed by a background dispatcher
 - **Idempotent consumers:** dedupe on message ID; redelivery-safe by design
 - **Eventual consistency:** alert notification flow documented end-to-end
-- **Resilience:** Polly retry with jitter + circuit breaker around the external feed; a **chaos test** kills RabbitMQ mid-flow and asserts recovery — **slice 4b, not yet built.** This slice built the outbox and the dead-letter path that make recovery possible; the chaos test is what proves it
+- **Resilience:** Polly retry with jitter + circuit breaker around the external feed (**slice 6, not yet built**); a **chaos test** (`ChaosTests.cs`, slice 4b) composes the real API host and the real Alerts worker against Testcontainers SQL Server and RabbitMQ, stops the broker container between a rule firing and its outbox row dispatching, restarts it, and asserts exactly one notification survives — 4a built the outbox and the dead-letter path that make recovery possible, and this is the test that proves it
 
 #### 12. Cloud & DevOps
 
@@ -375,14 +375,15 @@ marketpulse-pro/
 
 ### What actually runs today
 
-These commands are the real, runnable path on this branch, through slice 4a — the alerts
-pipeline's backend. `docker compose up -d` now starts SQL Server **and** RabbitMQ, and the
-Alerts worker is a real, separately-run project that evaluates rules and dispatches the
-outbox. What is still missing is the alerts and notifications **UI**: there is no page in
-the dashboard to create a rule or see a notification yet, because that is slice 4b.
-Exercising the pipeline end to end today means calling the API directly
-(`POST /api/v1/alerts`) and connecting a SignalR client to `/hubs/notifications`, not
-clicking through the dashboard.
+These commands are the real, runnable path on this branch, through slice 4b — the alerts
+pipeline's backend (4a) plus its UI and chaos test (4b). `docker compose up -d` starts SQL
+Server **and** RabbitMQ, and the Alerts worker is a real, separately-run project that
+evaluates rules and dispatches the outbox. The dashboard now has the alerts and
+notifications UI: an inline control on each watchlist row to set a threshold alert, and a
+bell in the header that opens a panel of notifications as they arrive over SignalR.
+Exercising the pipeline end to end today means clicking through the dashboard — set an alert
+below the current price, watch it flip to Triggered on the next tick, and see the
+notification land in the panel — not calling the API directly.
 
 ```bash
 # 1. Start infrastructure (SQL Server + RabbitMQ)
@@ -499,7 +500,7 @@ deliberate.
 - [ ] Zero critical axe accessibility violations
 - [ ] CSP with no `unsafe-inline` in production
 - [ ] Backend integration tests run against **real** SQL Server + RabbitMQ (Testcontainers) in CI
-- [ ] Chaos test: RabbitMQ outage recovers with zero lost alerts
+- [x] Chaos test: RabbitMQ outage recovers with zero lost alerts
 - [ ] p95 API latency < 200ms under ingestion load (documented load test)
 - [ ] Every significant decision has an ADR with rejected alternatives
 - [ ] Six engineering write-ups documented with real metrics

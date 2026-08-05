@@ -170,11 +170,11 @@ alongside the work — see the register below.
 
 ## Open ordering questions
 
-Two decisions this document does not make:
+One decision this document does not make (a second — portfolio before or after alerts — is
+answered: alerts (slices 4a/4b) landed first, on the reasoning that it was the stronger
+engineering story):
 
-1. **Portfolio (slice 5) before or after alerts (slice 4)?** Alerts is the stronger
-   engineering story; portfolio is the larger product gap. Current order puts alerts first.
-2. **Does the micro-frontend get built?** `apps/alerts-mfe` (Module Federation) is documented
+1. **Does the micro-frontend get built?** `apps/alerts-mfe` (Module Federation) is documented
    but unscheduled. It is a substantial architectural commitment that no phase currently
    covers. Either it earns a slice or it comes out of the README.
 
