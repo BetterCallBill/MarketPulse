@@ -1,7 +1,7 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PriceCell } from './PriceCell';
-import { isStale, type StreamState } from './streamReducer';
+import { isStale, STALE_AFTER_MS, type StreamState } from './streamReducer';
 import { useNow } from './useNow';
 
 /**
@@ -47,7 +47,7 @@ describe('PriceCell live staleness', () => {
     expect(cell).toHaveAttribute('data-stale', 'false');
 
     act(() => {
-      vi.advanceTimersByTime(10_000);
+      vi.advanceTimersByTime(STALE_AFTER_MS);
     });
 
     expect(cell).toHaveAttribute('data-stale', 'true');

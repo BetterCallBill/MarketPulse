@@ -24,7 +24,12 @@ public sealed class MarketDataOptions : IValidatableObject
     [Required]
     public string BaseUrl { get; init; } = "https://query1.finance.yahoo.com";
 
-    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(20);
+    /// <summary>Default 60s. `SeedData.ReferenceTickers` seeds 25 symbols, one request each
+    /// per poll, so 60s is 25 requests/minute against a keyless, unofficial endpoint — the
+    /// politeness ADR-010's decision 6 argues for. The feed is ~20 minutes delayed, so a
+    /// faster cadence would buy no freshness; it would only raise the request rate. See
+    /// ADR-010's amendment note.</summary>
+    public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(60);
 
     /// <summary>Per-attempt cap, well under the poll interval so a hung upstream can
     /// never stack polls.</summary>

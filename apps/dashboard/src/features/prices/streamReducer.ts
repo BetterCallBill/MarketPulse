@@ -1,4 +1,9 @@
-export const STALE_AFTER_MS = 10_000;
+// "Stale" means "later than the slowest expected source cadence would explain," not a
+// fixed UI taste — it is coupled to MarketDataOptions.PollInterval on the backend (60s
+// default against Yahoo, ADR-010). 3x the slowest expected poll absorbs one missed poll
+// without flashing fresh->stale on schedule, while still catching a genuinely dead feed
+// well before a human would. See ADR-010's staleness-coupling consequence.
+export const STALE_AFTER_MS = 180_000;
 
 export type StreamStatus = 'connecting' | 'connected' | 'reconnecting';
 
