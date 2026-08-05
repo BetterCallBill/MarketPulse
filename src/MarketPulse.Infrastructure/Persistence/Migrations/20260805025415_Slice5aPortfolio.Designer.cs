@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MarketPulse.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(MarketPulseDbContext))]
-    [Migration("20260805024902_Slice5aPortfolio")]
+    [Migration("20260805025415_Slice5aPortfolio")]
     partial class Slice5aPortfolio
     {
         /// <inheritdoc />
@@ -171,6 +171,9 @@ namespace MarketPulse.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("LastTradedUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -544,12 +547,6 @@ namespace MarketPulse.Infrastructure.Persistence.Migrations
                             b1.Property<decimal>("RealisedPnL")
                                 .HasPrecision(18, 4)
                                 .HasColumnType("decimal(18,4)");
-
-                            b1.Property<byte[]>("RowVersion")
-                                .IsConcurrencyToken()
-                                .IsRequired()
-                                .ValueGeneratedOnAddOrUpdate()
-                                .HasColumnType("rowversion");
 
                             b1.Property<string>("Ticker")
                                 .IsRequired()

@@ -16,6 +16,54 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
     public DbSet<Portfolio> Portfolios => Set<Portfolio>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
 
+    /// <summary>
+    /// Portfolio.LastTradedUtc records the intent (see its doc comment), but EF's
+    /// snapshot-based change tracking only flags a property "modified" when the new value
+    /// differs from what was loaded. Two trades that happen to share a RecordedUtc — a fixed
+    /// timestamp in a test, a batch import, anything not wall-clock — leave it looking
+    /// unchanged, so the write to the Portfolios row would silently not happen and its
+    /// RowVersion would go unchecked: back to the exact gap the property exists to close.
+    /// Forcing every Portfolio whose Holdings changed into Modified state — independent of
+    /// whether any of its own scalar properties' values actually differ — is what makes "the
+    /// concurrency token lives on the portfolio row" true unconditionally, for every trade.
+    /// </summary>
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        TouchTradedPortfolios();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    /// <inheritdoc cref="SaveChanges(bool)"/>
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        TouchTradedPortfolios();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void TouchTradedPortfolios()
+    {
+        ChangeTracker.DetectChanges();
+
+        var tradedPortfolioIds = ChangeTracker.Entries<Holding>()
+            .Where(e => e.State is EntityState.Added or EntityState.Modified)
+            .Select(e => e.Entity.PortfolioId)
+            .ToHashSet();
+
+        if (tradedPortfolioIds.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var entry in ChangeTracker.Entries<Portfolio>())
+        {
+            if (entry.State == EntityState.Unchanged && tradedPortfolioIds.Contains(entry.Entity.Id))
+            {
+                entry.State = EntityState.Modified;
+            }
+        }
+    }
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.Entity<User>(e =>
@@ -175,6 +223,14 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.UserId).IsUnique();
             e.Property(x => x.RowVersion).IsRowVersion();
+
+            // Trades otherwise only mutate a Holding row (separate table, owned collection
+            // below), so without this SaveChanges never issues an UPDATE against Portfolios
+            // and RowVersion — checked only on that UPDATE — never guards the trade at all.
+            // Portfolio.RecordBuy/RecordSell write this on every trade for exactly that
+            // reason; see the property's doc comment on the Domain type.
+            e.Property(x => x.LastTradedUtc);
+
             e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -192,17 +248,6 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
                 holdings.Property(x => x.AverageCost).HasPrecision(18, 4);
                 holdings.Property(x => x.RealisedPnL).HasPrecision(18, 4);
                 holdings.HasIndex(x => new { x.PortfolioId, x.Ticker }).IsUnique();
-
-                // Portfolio.RowVersion alone does not cover this: a buy/sell only mutates a
-                // Holding row, in the separate Holdings table, so SaveChanges never issues an
-                // UPDATE against Portfolios and that token is never checked. Portfolio's own
-                // doc comment states the invariant this exists to enforce ("two concurrent
-                // sells of the same holding must not oversell") — a shadow rowversion here,
-                // on the row that actually changes, is what makes the loser's UPDATE match no
-                // row. Schema-neutral like Watchlist's ValueGeneratedNever: this is a
-                // concurrency token, not a Domain-visible property, so it stays a shadow
-                // property rather than a field on Holding.
-                holdings.Property<byte[]>("RowVersion").IsRowVersion().IsRequired();
             });
         });
 

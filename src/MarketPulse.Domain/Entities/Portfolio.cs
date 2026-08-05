@@ -24,6 +24,23 @@ public sealed class Portfolio
     /// </summary>
     public byte[] RowVersion { get; private set; } = [];
 
+    /// <summary>
+    /// Set on every trade, deliberately load-bearing: a buy/sell otherwise only mutates a
+    /// Holding row (a separate table via the owned-collection mapping), so nothing forces
+    /// SaveChanges to touch the Portfolios row at all — and RowVersion is only ever checked
+    /// on an UPDATE against that row. Writing this on every RecordBuy/RecordSell records the
+    /// trade on the root, in the same unit of work.
+    ///
+    /// That alone is not sufficient — two trades can share a RecordedUtc (a fixed timestamp
+    /// in a test, a batch import), which leaves the value looking unchanged to EF's
+    /// snapshot-based tracking and the write would silently not happen. MarketPulseDbContext
+    /// backstops this: it forces any Portfolio with a modified Holding into the Modified
+    /// state before saving, independent of whether this property's value actually differs.
+    /// Between the two, "the concurrency token lives on the portfolio row" holds
+    /// unconditionally for every trade.
+    /// </summary>
+    public DateTimeOffset? LastTradedUtc { get; private set; }
+
     private Portfolio() { }
 
     public static Portfolio Create(Guid userId) => new()
@@ -46,6 +63,7 @@ public sealed class Portfolio
         }
 
         holding.ApplyBuy(units, price);
+        LastTradedUtc = recordedUtc;
         return new Transaction(Id, code, TransactionSide.Buy, units, price, occurredUtc, recordedUtc);
     }
 
@@ -63,6 +81,7 @@ public sealed class Portfolio
         }
 
         holding.ApplySell(units, price);
+        LastTradedUtc = recordedUtc;
         return new Transaction(Id, code, TransactionSide.Sell, units, price, occurredUtc, recordedUtc);
     }
 

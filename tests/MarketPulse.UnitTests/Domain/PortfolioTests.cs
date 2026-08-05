@@ -147,4 +147,31 @@ public class PortfolioTests
 
         Assert.Equal("IVV", Assert.Single(portfolio.Holdings).Ticker);
     }
+
+    [Fact]
+    public void A_trade_stamps_the_root_with_when_it_was_recorded()
+    {
+        // Load-bearing, not informational: this is what puts the portfolio row — and its
+        // RowVersion — into every trade's unit of work (see the property's doc comment).
+        var portfolio = NewPortfolio();
+        Assert.Null(portfolio.LastTradedUtc);
+
+        portfolio.RecordBuy("IVV", 1m, 60m, Now, Now);
+        Assert.Equal(Now, portfolio.LastTradedUtc);
+
+        var later = Now.AddMinutes(1);
+        portfolio.RecordSell("IVV", 1m, 60m, later, later);
+        Assert.Equal(later, portfolio.LastTradedUtc);
+    }
+
+    [Fact]
+    public void A_rejected_trade_does_not_stamp_the_root()
+    {
+        var portfolio = NewPortfolio();
+
+        Assert.Throws<InsufficientHoldingsException>(
+            () => portfolio.RecordSell("IVV", 1m, 60m, Now, Now));
+
+        Assert.Null(portfolio.LastTradedUtc);
+    }
 }
