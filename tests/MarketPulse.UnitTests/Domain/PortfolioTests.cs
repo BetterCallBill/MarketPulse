@@ -151,8 +151,6 @@ public class PortfolioTests
     [Fact]
     public void A_trade_stamps_the_root_with_when_it_was_recorded()
     {
-        // Load-bearing, not informational: this is what puts the portfolio row — and its
-        // RowVersion — into every trade's unit of work (see the property's doc comment).
         var portfolio = NewPortfolio();
         Assert.Null(portfolio.LastTradedUtc);
 
@@ -173,5 +171,32 @@ public class PortfolioTests
             () => portfolio.RecordSell("IVV", 1m, 60m, Now, Now));
 
         Assert.Null(portfolio.LastTradedUtc);
+    }
+
+    [Fact]
+    public void A_trade_increments_the_root_version()
+    {
+        // Load-bearing, not informational: this is what guarantees a scalar on the portfolio
+        // row always changes, which is what puts the row — and its RowVersion — into every
+        // trade's unit of work (see the property's doc comment).
+        var portfolio = NewPortfolio();
+        Assert.Equal(0, portfolio.Version);
+
+        portfolio.RecordBuy("IVV", 1m, 60m, Now, Now);
+        Assert.Equal(1, portfolio.Version);
+
+        portfolio.RecordSell("IVV", 1m, 60m, Now, Now);
+        Assert.Equal(2, portfolio.Version);
+    }
+
+    [Fact]
+    public void A_rejected_trade_does_not_increment_the_root_version()
+    {
+        var portfolio = NewPortfolio();
+
+        Assert.Throws<InsufficientHoldingsException>(
+            () => portfolio.RecordSell("IVV", 1m, 60m, Now, Now));
+
+        Assert.Equal(0, portfolio.Version);
     }
 }

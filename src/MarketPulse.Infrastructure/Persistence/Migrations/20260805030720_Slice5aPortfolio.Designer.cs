@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MarketPulse.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(MarketPulseDbContext))]
-    [Migration("20260805025415_Slice5aPortfolio")]
+    [Migration("20260805030720_Slice5aPortfolio")]
     partial class Slice5aPortfolio
     {
         /// <inheritdoc />
@@ -183,6 +183,9 @@ namespace MarketPulse.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 

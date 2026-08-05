@@ -24,22 +24,23 @@ public sealed class Portfolio
     /// </summary>
     public byte[] RowVersion { get; private set; } = [];
 
-    /// <summary>
-    /// Set on every trade, deliberately load-bearing: a buy/sell otherwise only mutates a
-    /// Holding row (a separate table via the owned-collection mapping), so nothing forces
-    /// SaveChanges to touch the Portfolios row at all — and RowVersion is only ever checked
-    /// on an UPDATE against that row. Writing this on every RecordBuy/RecordSell records the
-    /// trade on the root, in the same unit of work.
-    ///
-    /// That alone is not sufficient — two trades can share a RecordedUtc (a fixed timestamp
-    /// in a test, a batch import), which leaves the value looking unchanged to EF's
-    /// snapshot-based tracking and the write would silently not happen. MarketPulseDbContext
-    /// backstops this: it forces any Portfolio with a modified Holding into the Modified
-    /// state before saving, independent of whether this property's value actually differs.
-    /// Between the two, "the concurrency token lives on the portfolio row" holds
-    /// unconditionally for every trade.
-    /// </summary>
+    /// <summary>When the user last traded, for display. Not load-bearing for concurrency —
+    /// see <see cref="Version"/> for that.</summary>
     public DateTimeOffset? LastTradedUtc { get; private set; }
+
+    /// <summary>
+    /// A monotonic counter on the root, bumped on every trade. A buy/sell otherwise only
+    /// mutates a Holding row — a separate table via the owned-collection mapping — so
+    /// nothing would otherwise force SaveChanges to touch the Portfolios row at all, and
+    /// RowVersion (the actual concurrency token) is only ever checked on an UPDATE against
+    /// that row. Incrementing this on every trade guarantees a scalar on the root always
+    /// changes, in the same unit of work as the trade, which is what puts the portfolio row
+    /// — and its RowVersion check — into every trade's UPDATE. Deliberately load-bearing and
+    /// entirely visible here in the Domain, not behind persistence-layer plumbing: any future
+    /// method that mutates a Holding must bump this too, or its writes go unguarded exactly
+    /// as this one did before Version existed.
+    /// </summary>
+    public long Version { get; private set; }
 
     private Portfolio() { }
 
@@ -64,6 +65,7 @@ public sealed class Portfolio
 
         holding.ApplyBuy(units, price);
         LastTradedUtc = recordedUtc;
+        Version++;
         return new Transaction(Id, code, TransactionSide.Buy, units, price, occurredUtc, recordedUtc);
     }
 
@@ -82,6 +84,7 @@ public sealed class Portfolio
 
         holding.ApplySell(units, price);
         LastTradedUtc = recordedUtc;
+        Version++;
         return new Transaction(Id, code, TransactionSide.Sell, units, price, occurredUtc, recordedUtc);
     }
 

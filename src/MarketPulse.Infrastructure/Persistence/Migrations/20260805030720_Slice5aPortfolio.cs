@@ -18,7 +18,8 @@ namespace MarketPulse.Infrastructure.Persistence.Migrations
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
-                    LastTradedUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true)
+                    LastTradedUtc = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    Version = table.Column<long>(type: "bigint", nullable: false)
                 },
                 constraints: table =>
                 {
