@@ -3,7 +3,7 @@ import styles from './PortfolioScreen.module.css';
 import { useTransactions } from './usePortfolio';
 
 export function TransactionHistory({ pageSize = 20 }: { pageSize?: number }) {
-  const { transactions, hasMore, loadMore, isPending } = useTransactions(pageSize);
+  const { transactions, hasMore, loadMore, isPending, isFetching } = useTransactions(pageSize);
 
   return (
     <section aria-labelledby="history-heading">
@@ -11,7 +11,9 @@ export function TransactionHistory({ pageSize = 20 }: { pageSize?: number }) {
         History
       </h3>
       <Panel>
-        {transactions.length === 0 && !isPending ? (
+        {isPending ? (
+          <p className={styles.empty}>Loading history…</p>
+        ) : transactions.length === 0 ? (
           <p className={styles.empty}>No trades recorded yet.</p>
         ) : (
           <ul className={styles.historyList}>
@@ -25,8 +27,11 @@ export function TransactionHistory({ pageSize = 20 }: { pageSize?: number }) {
             ))}
           </ul>
         )}
-        {hasMore && (
-          <Button variant="ghost" onClick={loadMore} disabled={isPending}>
+        {/* During a page fetch, the placeholder list makes hasMore false (0 !== n×pageSize),
+            so the button must key off isFetching to stay mounted-and-disabled rather than
+            vanishing mid-fetch. */}
+        {(hasMore || isFetching) && !isPending && (
+          <Button variant="ghost" onClick={loadMore} disabled={isFetching}>
             Load more
           </Button>
         )}

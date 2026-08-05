@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { HttpResponse, http } from 'msw';
+import { HttpResponse, delay, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { TransactionHistory } from './TransactionHistory';
@@ -56,5 +56,52 @@ describe('TransactionHistory', () => {
     renderHistory();
 
     expect(await screen.findByText('No trades recorded yet.')).toBeInTheDocument();
+  });
+
+  it('keeps rows and load-more button mounted while a page fetch is in flight', async () => {
+    server.use(
+      http.get('http://localhost:5100/api/v1/portfolio/transactions', async ({ request }) => {
+        const take = Number(new URL(request.url).searchParams.get('take'));
+        // Delay the response so we can observe the intermediate state.
+        await delay(50);
+        return HttpResponse.json(fixture.slice(0, take));
+      }),
+    );
+
+    renderHistory();
+
+    expect(await screen.findByText('Sell 4 IVV @ $70.00')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+
+    // Click "Load more", triggering a page fetch.
+    await userEvent.click(screen.getByRole('button', { name: 'Load more' }));
+
+    // While the fetch is in flight, the old rows must remain visible and the button
+    // must stay mounted (but disabled).
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeDisabled();
+
+    // Once the fetch resolves, the new full list appears.
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(3));
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+  });
+
+  it('shows loading text during the initial fetch', async () => {
+    server.use(
+      http.get('http://localhost:5100/api/v1/portfolio/transactions', async () => {
+        // Delay the response so we can observe the loading state.
+        await delay(50);
+        return HttpResponse.json(fixture.slice(0, 2));
+      }),
+    );
+
+    renderHistory();
+
+    // While the initial fetch is in flight, the panel must show a loading message,
+    // not a blank panel.
+    expect(screen.getByText(/loading history/i)).toBeInTheDocument();
+
+    // Once the fetch resolves, the rows appear.
+    expect(await screen.findByText('Sell 4 IVV @ $70.00')).toBeInTheDocument();
   });
 });
