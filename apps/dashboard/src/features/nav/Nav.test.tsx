@@ -43,6 +43,11 @@ describe('Nav', () => {
       http.get('http://localhost:5100/api/v1/auth/me', () =>
         HttpResponse.json({ title: 'unauthorized', status: 401 }, { status: 401 }),
       ),
+      // A 401 on /me triggers the api-client's refresh-and-retry; give it a handler
+      // too, so the request isn't unhandled.
+      http.post('http://localhost:5100/api/v1/auth/refresh', () =>
+        HttpResponse.json({ title: 'session-revoked', status: 401 }, { status: 401 }),
+      ),
     );
 
     const { container } = renderNav();
