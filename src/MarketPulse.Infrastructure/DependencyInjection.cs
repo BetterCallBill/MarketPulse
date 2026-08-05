@@ -7,6 +7,8 @@ using MarketPulse.Infrastructure.RealTime;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace MarketPulse.Infrastructure;
 
@@ -54,6 +56,24 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IPasswordHasher, PasswordHasherAdapter>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<PriceTickChannel>();
+
+        // Typed client + resilience pipeline for the real tick producer. Registering this
+        // is inert on its own — nothing resolves YahooQuoteClient until Task 4 adds the
+        // hosted service that consumes it — so it is safe to register unconditionally,
+        // alongside the fake below.
+        services.AddHttpClient<YahooQuoteClient>((provider, client) =>
+        {
+            var options = provider.GetRequiredService<IOptions<MarketDataOptions>>().Value;
+            client.BaseAddress = new Uri(options.BaseUrl);
+        })
+        .AddResilienceHandler("market-data", (builder, context) =>
+        {
+            var options = context.ServiceProvider
+                .GetRequiredService<IOptions<MarketDataOptions>>().Value;
+            var logger = context.ServiceProvider
+                .GetRequiredService<ILoggerFactory>().CreateLogger("MarketPulse.MarketData.Resilience");
+            MarketDataResilience.Configure(builder, options, TimeProvider.System, logger);
+        });
 
         // Exactly one tick producer. Read raw here because hosted-service registration
         // happens before options validation runs; a bad value still fails startup via
