@@ -1,5 +1,6 @@
 import { HoldingsTable } from './HoldingsTable';
 import styles from './PortfolioScreen.module.css';
+import { TradeForm } from './TradeForm';
 
 export function PortfolioScreen() {
   return (
@@ -8,7 +9,8 @@ export function PortfolioScreen() {
         Portfolio
       </h2>
       <HoldingsTable />
-      {/* TradeForm, History land in Tasks 5–6 */}
+      <TradeForm />
+      {/* History lands in Task 6 */}
     </section>
   );
 }

@@ -1,0 +1,28 @@
+.heading {
+  margin: 0 0 var(--mp-space-2);
+  font-size: 1rem;
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mp-space-2);
+}
+
+.field {
+  padding: var(--mp-space-1) var(--mp-space-2);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-sm);
+  background: var(--mp-surface-base);
+  color: var(--mp-text-primary);
+  font: inherit;
+  width: 7rem;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--mp-space-2);
+  margin-top: var(--mp-space-2);
+}
