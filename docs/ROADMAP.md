@@ -4,7 +4,7 @@ The README's delivery plan describes the finished product. This document describ
 repository actually is, what remains, and in what order it gets built. When the two disagree,
 this one is right.
 
-**Verified against commit `deaa18a` on `feature/slice-5b-portfolio-dashboard`, 2026-08-05**
+**Verified against commit `65914bc` on `feature/slice-6-market-data-ingestion`, 2026-08-05**
 (the branch's code head immediately before this docs commit — a commit cannot cite its own
 hash before it exists). Every status below was checked against the source tree, not against
 documentation.
@@ -34,7 +34,7 @@ documentation.
 | Phase | Status | Present | Absent |
 |---|---|---|---|
 | 1 · Backend foundation | **Done** | Clean Architecture layering (enforced by `DependencyRuleTests`), EF Core + 6 migrations, cookie auth with refresh-token rotation, CSRF, auth rate limiting, watchlist CRUD, `Portfolio` aggregate (holdings, average-cost basis, realised P&L), buy/sell transactions, the idempotency-key store | — |
-| 2 · Real-time core | **Partial** | SignalR hub + fan-out, `PriceTickChannel`, tick delivery to the dashboard | Real market-data feed (ticks come from `FakeTickService`, a random walk), tick persistence, Dapper history queries |
+| 2 · Real-time core | **Partial** | SignalR hub + fan-out, `PriceTickChannel`, tick delivery to the dashboard, the real Yahoo Finance market-data feed behind a retry/breaker/timeout resilience pipeline (`MarketData:Source=Yahoo`, [ADR-010](adr/010-market-data-feed.md)) — `FakeTickService`'s random walk stays the default for tests and offline development, with no fallback to it if the real feed fails | Tick persistence, Dapper history queries |
 | 3 · Messaging & alerts | **Done** | RabbitMQ, the outbox, the Alerts worker, alert rules, notifications, per-user delivery, and the chaos test proving zero lost alerts across a broker kill/restart | — |
 | 4 · Frontend core | **Done** | `packages/ui` token system + primitives, `packages/api-client` (zod-validated, no direct `fetch` anywhere in the app), TanStack Query for server state, auth screens, watchlist table with live price cells, alerts and notifications UI (inline rule control, notifications panel), header navigation (`Watchlist \| Portfolio`), portfolio dashboard (holdings table with render-derived live unrealised P&L, trade form with submission-scoped idempotency keys, transaction history with load-more) | — |
 | 5 · Cloud & pipeline | **Not started** | CI runs backend tests, frontend tests, and Playwright E2E against a real database | Terraform, ECS, CloudFront/S3, Lambda snapshot, OpenTelemetry, deployment pipeline |
@@ -69,6 +69,7 @@ phase.
 | 4b · Alerts UI and chaos test | 2026-08-05 | `features/alerts` (inline rule control on watchlist rows) and `features/notifications` (bell badge, dropdown panel, mark-read-on-open) on `packages/ui`; `useNotificationStream` patching SignalR pushes into the TanStack Query cache; ADR-007 (client state is the server cache — Zustand rejected); the `alerts.spec.ts` Playwright journey with the Alerts worker spawned from global-setup; `ChaosTests.cs`, the chaos test that stops RabbitMQ between a rule triggering and its outbox row dispatching and proves exactly one notification survives the restart. Two of 4a's carried-over review findings fixed along the way |
 | 5a · Portfolio backend | 2026-08-05 | `Portfolio` aggregate (implicit per-user creation, `Holding`s, average-cost basis, realised P&L) behind MediatR commands/queries over one store (ADR-004); `Portfolio.Version`, a monotonic counter that keeps the aggregate's `RowVersion` guarding every trade even though a buy/sell only touches a `Holding` row; stored-key idempotency (`IdempotencyFilter`) on `POST /portfolio/transactions` and `POST /alerts`, settling the debt 4a deferred; `PortfolioConcurrencyAnomalyTests`, the oversell lost-update anomaly reproduced with the concurrency token bypassed and prevented with it. Backend-only, on the 4a/4b precedent — no dashboard changes |
 | 5b · Portfolio dashboard | 2026-08-05 | `/portfolio` route and header navigation (`Watchlist \| Portfolio`, session-gated); `HoldingsTable` with unrealised P&L derived at render from the `['portfolio']` cache × the price stream (ADR-007's third worked example), em-dash for an unticked holding and for the footer total when any held ticker lacks a price; `TradeForm` with submission-scoped idempotency keys (`crypto.randomUUID()` minted per submission, reused by Retry after a 409, fresh on the next submission), no optimistic updates; `TransactionHistory`'s growing take-window load-more; the `portfolio.spec.ts` Playwright journey (buy, sell, P&L, history, reload); Vitest coverage of the key lifecycle 5a's server-side tests couldn't see. Closes phase 4 |
+| 6 · Real market-data ingestion | 2026-08-05 | `YahooPriceFeedService` (`BackgroundService`, per-symbol concurrent polls of the keyless `v8/finance/chart/{symbol}` endpoint every 60s (25 req/min against the 25-symbol seed set), ASX↔`.AX` symbol mapping, observation-time timestamps) writing into the same `PriceTickChannel` the fake fills; `MarketDataResilience`'s declared retry (3×, exponential backoff with jitter) → circuit breaker (`FailureRatio` 0.9, `MinimumThroughput` 6, 90s sampling, 2min break) → per-attempt timeout pipeline on the typed `YahooQuoteClient`, proven against a `FakeTimeProvider`; `MarketData:Source=Fake\|Yahoo` composition switch (`Fake` default, bad value fails startup via `ValidateOnStart`); ADR-010 (feed selection, the tolerated-failure-modes table, the no-fallback product decision). Per-symbol bad quotes are skipped with one warning, siblings unaffected; a failed poll writes nothing and the next self-heals; no fallback to the fake. Task 6's manual rehearsal against the live upstream ran 2026-08-05/06: real prices confirmed (independent curl and the service's own successful polls agreed, e.g. IVV.AX 73.33 vs the 62.10 seed) and the dead-endpoint failure path confirmed (`Market-data circuit opened for 00:02:00 after sustained failures.`, health stayed 200 throughout) — see task-6-report.md. The live alert-fire leg was attempted but not captured: this sandbox's egress IP hit sustained Yahoo rate-limiting (429) partway through the session, which the breaker itself correctly suppressed, leaving no further real ticks to trigger a rule before the session's time budget ran out |
 
 #### 4a review findings: resolved and outstanding
 
@@ -109,16 +110,8 @@ restart.
 
 ## Remaining slices
 
-Eight slices remain. Sizing assumes the ~8-task shape of slices 1–3; slices marked **may split**
-are the ones most likely to exceed it.
-
-### 6 · Real market-data ingestion · phase 2
-Replace `FakeTickService` with a real feed behind Polly retry and circuit breaker, keeping
-the fake behind configuration for tests and offline development. ADR on feed selection and
-the failure modes chosen to tolerate.
-
-*Depends on:* nothing outstanding, but is more valuable after 4a — a real feed makes alerts
-real rather than a demonstration against a random walk.
+Seven slices remain. Sizing assumes the ~8-task shape of slices 1–3; slices marked **may
+split** are the ones most likely to exceed it.
 
 ### 7 · Price history and charts · phase 2 · may split
 Tick persistence, Dapper history queries, candle aggregation, dashboard chart. Carries the
