@@ -1,9 +1,11 @@
 using MarketPulse.Application.Abstractions;
+using MarketPulse.Application.Configuration;
 using MarketPulse.Infrastructure.Authentication;
 using MarketPulse.Infrastructure.Messaging;
 using MarketPulse.Infrastructure.Persistence;
 using MarketPulse.Infrastructure.RealTime;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MarketPulse.Infrastructure;
@@ -45,12 +47,25 @@ public static class InfrastructureServiceCollectionExtensions
 
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
-        string connectionString)
+        string connectionString,
+        IConfiguration configuration)
     {
         services.AddPersistence(connectionString);
         services.AddSingleton<IPasswordHasher, PasswordHasherAdapter>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<PriceTickChannel>();
+
+        // Exactly one tick producer. Read raw here because hosted-service registration
+        // happens before options validation runs; a bad value still fails startup via
+        // ValidateOnStart, and the composition tests pin both sides.
+        var source = configuration[$"{MarketDataOptions.SectionName}:Source"];
+
+        if (string.Equals(source, MarketDataOptions.YahooSource, StringComparison.OrdinalIgnoreCase))
+        {
+            // Task 4 replaces this line with the real registration.
+            throw new NotSupportedException("MarketData:Source=Yahoo lands in a later task.");
+        }
+
         services.AddHostedService<FakeTickService>();
         return services;
     }
