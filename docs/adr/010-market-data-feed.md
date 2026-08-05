@@ -68,7 +68,9 @@ because it is a real example of the risk decision 1 below accepts on purpose.
    may span a circuit that broke and recovered mid-poll; breaker inside it; per-attempt
    timeout innermost so one hung request can never stack polls. Retry: 3 attempts,
    exponential backoff with jitter, on `HttpRequestException`, `TimeoutRejectedException`,
-   408, 429, and 5xx. Circuit breaker: `FailureRatio` 0.9 over `MinimumThroughput` 6 within a
+   408, and 5xx — deliberately not 429 (see the tolerated-failure-modes table below: retrying
+   a throttled endpoint inside a poll is amplification, not resilience; the next poll already
+   is the retry). Circuit breaker: `FailureRatio` 0.9 over `MinimumThroughput` 6 within a
    90-second `SamplingDuration` — tuned, per the pipeline's own code comment, so that roughly
    two consecutive, fully-retried failed polls open it, not one bad batch — `BreakDuration`
    2 minutes, half-open probe after. Per-attempt timeout: `MarketDataOptions.AttemptTimeout`,
@@ -77,13 +79,19 @@ because it is a real example of the risk decision 1 below accepts on purpose.
    an already-open breaker logs at Debug, so 25 symbols failing the same open circuit in one
    poll produce one warning, not 25.
 
-6. **60-second polling, per-symbol concurrent within a poll.** `YahooPriceFeedService` fans
-   one request per seed symbol out concurrently every `PollInterval` (default 60s, no
-   throttling machinery — the fan-out is bounded by the symbol count on its own). The 25
-   seeded reference tickers (`SeedData.ReferenceTickers`) at one request each every 60
-   seconds is 1 poll a minute × 25 symbols = **25 requests a minute** against a keyless
-   public endpoint — a request rate an ordinary browser session against the same site would
-   produce without particular effort, and nothing on a feed that is already ~20 minutes
+6. **60-second polling, per-symbol starts staggered within a poll.** `YahooPriceFeedService`
+   issues one request per seed symbol every `PollInterval` (default 60s), with each
+   request's *start* spread across the first half of that window — roughly 1.2s apart at
+   the 25-symbol default — rather than fired as one simultaneous burst; see the
+   tolerated-failure-modes table's 429 row for why a simultaneous burst is itself a
+   throttling trigger regardless of request volume. The 25 seeded reference tickers
+   (`SeedData.ReferenceTickers`) at one request each every 60 seconds is 1 poll a minute ×
+   25 symbols = **25 requests a minute** against a keyless public endpoint. Whether that
+   figure alone reads as "polite" turned out to matter less than *shape*: this slice's
+   rehearsal drew sustained 429s from a UA-less, simultaneous version of the same 25
+   requests/minute, and stopped once a browser-realistic `User-Agent`/`Accept` and the
+   stagger above were added — so the operative claim is request *shape*, not just rate, and
+   it is evidenced rather than assumed. Nothing on a feed that is already ~20 minutes
    delayed; polling faster would buy no freshness. (An earlier design pass estimated this
    against a smaller assumed symbol count [~8] at a 20s cadence, which would have been 75
    requests a minute against the actual 25-symbol seed set — triple the intended
@@ -112,7 +120,7 @@ each row is silence, which is what this ADR refuses.
 | **Transient failure** — a single 5xx, 408, timeout, or connection failure on one attempt | Retried inside the same poll by the pipeline's retry strategy (3 attempts, exponential backoff with jitter) before the caller ever sees a failure |
 | **Sustained failure** — enough consecutive failures across recent polls to trip `FailureRatio` 0.9 over `MinimumThroughput` 6 in the 90s sampling window | The breaker opens; every request for the next 2 minutes fails fast with `BrokenCircuitException` (logged once at Warning on the transition, then Debug per skipped symbol) — no wasted attempts against a downed upstream; a half-open probe after the break duration decides whether to close again; the dashboard's staleness UI is what actually surfaces this to a user, because no tick has been written |
 | **Upstream shape change** — a 200 response whose JSON no longer matches the DTOs (renamed field, restructured envelope, Yahoo changing its unofficial contract) | `JsonException` during deserialisation is caught and treated identically to a missing price: `GetPriceAsync` returns `null`, the service skips the symbol with one warning. A silent shape change degrades to the same lossy-skip path as a bad quote, not a crash |
-| **Rate limiting (429)** | Classified as transient by the same `IsTransient` predicate as a 5xx; retried with the same exponential backoff before counting toward the breaker's failure ratio. Sustained 429s look like sustained failure and open the breaker the same way |
+| **Rate limiting (429)** | Not retried within a poll — retrying a throttled endpoint at a 250ms base delay would be amplification, not resilience, and the next poll (`PollInterval` away) already is the retry; it still counts toward the breaker's failure ratio, so sustained 429s open the breaker exactly as sustained 5xx does. Observed in this slice's rehearsal: a UA-less, simultaneous 25-way burst drew sustained 429s from Yahoo's edge — see the request-profile hardening (realistic `User-Agent`/`Accept` headers, staggered poll starts) this finding prompted |
 
 ## Rationale
 
@@ -159,12 +167,15 @@ still be running when the next `PeriodicTimer` tick fires.
 
 **60-second polling.** The feed itself is ~20 minutes delayed; polling every second would
 buy no freshness a human could perceive and would only raise the request rate against a
-keyless endpoint for no benefit. 60 seconds keeps the request volume (decision 6) to a
-genuinely polite 25 requests/minute against the actual 25-symbol seed set, while producing
-a tick cadence still fast enough that the dashboard and the alerts worker continue to
-behave as designed. The dashboard's staleness threshold does not get to stay implicit at
-this cadence, though — see the consequence below; `STALE_AFTER_MS` was retuned alongside
-this decision rather than left pointing at the fake's 1-second rhythm.
+keyless endpoint for no benefit. 60 seconds keeps the request volume (decision 6) to
+25 requests/minute against the actual 25-symbol seed set, while producing a tick cadence
+still fast enough that the dashboard and the alerts worker continue to behave as designed.
+Volume alone did not turn out to be the whole politeness story, though — see decision 6's
+rehearsal note: the same 25 requests/minute drew sustained 429s until *shape* (headers,
+staggered starts) was fixed alongside rate. The dashboard's staleness threshold does not
+get to stay implicit at this cadence, though — see the consequence below; `STALE_AFTER_MS`
+was retuned alongside this decision rather than left pointing at the fake's 1-second
+rhythm.
 
 ## Rejected alternatives
 
@@ -227,7 +238,12 @@ default `PollInterval`), retuned alongside decision 6 rather than left as a sile
 assumption. This is a real, if narrow, coupling this ADR did not originally name: a future
 change to `PollInterval` should re-examine `STALE_AFTER_MS` rather than assume the
 dashboard's staleness UI is cadence-agnostic just because "dashboard changes of any kind"
-was out of this slice's scope for everything else.
+was out of this slice's scope for everything else. The retune has a cost on the `Fake`
+side too, not just a benefit on the `Yahoo` side: `FakeTickService` still ticks every
+second, so a dead fake (a stalled dev process, a broken local build) now reads as stale
+after 3 minutes instead of 10 seconds — a slower honest-failure signal in exchange for the
+real feed's threshold being correct at all. Nothing in this slice found that trade-off worth
+avoiding, but it is a real one, not a free retune.
 
 **The circuit breaker's tuning is calibrated in polls, not raw requests.**
 `MinimumThroughput` 6 over a 90-second `SamplingDuration` is tuned (per
@@ -235,8 +251,9 @@ was out of this slice's scope for everything else.
 fully-retried failed polls open the breaker, not one bad batch — deliberately slow enough
 that a single blip (one bad poll immediately followed by a good one) never trips it. Because
 every seed symbol's request shares the one breaker instance on the typed client, and a poll
-fires all of them concurrently, a poll where the upstream is entirely down drives many
-failed, fully-retried executions through that shared breaker at once — so in practice a
+spreads all of them across the first half of the poll window rather than serialising them
+one at a time, a poll where the upstream is entirely down still drives many failed,
+fully-retried executions through that shared breaker well within one poll — so in practice a
 total outage opens the breaker within the first poll or two, faster than the "roughly two
 polls" figure suggests for a single symbol failing in isolation. The cost of the breaker's
 patience is a slower reaction the rare time only a handful of symbols are failing rather than
