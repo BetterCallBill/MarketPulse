@@ -31,14 +31,14 @@ against the source tree, not against documentation.
 
 | Phase | Status | Present | Absent |
 |---|---|---|---|
-| 1 · Backend foundation | **Partial** | Clean Architecture layering (enforced by `DependencyRuleTests`), EF Core + 3 migrations, cookie auth with refresh-token rotation, CSRF, auth rate limiting, watchlist CRUD | Portfolio aggregate, holdings, transactions |
+| 1 · Backend foundation | **Done** | Clean Architecture layering (enforced by `DependencyRuleTests`), EF Core + 6 migrations, cookie auth with refresh-token rotation, CSRF, auth rate limiting, watchlist CRUD, `Portfolio` aggregate (holdings, average-cost basis, realised P&L), buy/sell transactions, the idempotency-key store | — |
 | 2 · Real-time core | **Partial** | SignalR hub + fan-out, `PriceTickChannel`, tick delivery to the dashboard | Real market-data feed (ticks come from `FakeTickService`, a random walk), tick persistence, Dapper history queries |
 | 3 · Messaging & alerts | **Done** | RabbitMQ, the outbox, the Alerts worker, alert rules, notifications, per-user delivery, and the chaos test proving zero lost alerts across a broker kill/restart | — |
 | 4 · Frontend core | **Partial** | `packages/ui` token system + primitives, `packages/api-client` (zod-validated, no direct `fetch` anywhere in the app), TanStack Query for server state, auth screens, watchlist table with live price cells, alerts and notifications UI (inline rule control, notifications panel) | ADR-007 written: server cache only |
 | 5 · Cloud & pipeline | **Not started** | CI runs backend tests, frontend tests, and Playwright E2E against a real database | Terraform, ECS, CloudFront/S3, Lambda snapshot, OpenTelemetry, deployment pipeline |
 | 6 · Hardening | **Not started** | Testcontainers integration suite, one E2E journey (authentication) | CSP, threat model, performance pass, RUM, load test, the documentation set |
 
-Two phases untouched, three partly built, one done.
+Two phases untouched, two partly built, two done.
 
 Phase 4's remainder had no slice of its own: the alerts and notifications UI landed in 4b, and
 took the client-state question with it. 4b's unread-notification handling was the trigger the
@@ -60,6 +60,7 @@ rewritten instead, to describe what the application actually does — see
 | 3 · Design system | 2026-08-03 | `packages/ui` two-layer design tokens, six primitives, dashboard restyle, contrast ratios asserted in CI |
 | 4a · Alerts pipeline — backend | 2026-08-04 | RabbitMQ topology, transactional outbox, the `MarketPulse.Alerts` worker, alert rule CRUD, per-user notification delivery over `NotificationHub`, ADR-009. Proven end to end by integration tests against real SQL Server and real RabbitMQ. No dashboard changes |
 | 4b · Alerts UI and chaos test | 2026-08-05 | `features/alerts` (inline rule control on watchlist rows) and `features/notifications` (bell badge, dropdown panel, mark-read-on-open) on `packages/ui`; `useNotificationStream` patching SignalR pushes into the TanStack Query cache; ADR-007 (client state is the server cache — Zustand rejected); the `alerts.spec.ts` Playwright journey with the Alerts worker spawned from global-setup; `ChaosTests.cs`, the chaos test that stops RabbitMQ between a rule triggering and its outbox row dispatching and proves exactly one notification survives the restart. Two of 4a's carried-over review findings fixed along the way |
+| 5a · Portfolio backend | 2026-08-05 | `Portfolio` aggregate (implicit per-user creation, `Holding`s, average-cost basis, realised P&L) behind MediatR commands/queries over one store (ADR-004); `Portfolio.Version`, a monotonic counter that keeps the aggregate's `RowVersion` guarding every trade even though a buy/sell only touches a `Holding` row; stored-key idempotency (`IdempotencyFilter`) on `POST /portfolio/transactions` and `POST /alerts`, settling the debt 4a deferred; `PortfolioConcurrencyAnomalyTests`, the oversell lost-update anomaly reproduced with the concurrency token bypassed and prevented with it. Backend-only, on the 4a/4b precedent — no dashboard changes |
 
 #### 4a review findings: resolved and outstanding
 
@@ -103,13 +104,14 @@ restart.
 Nine slices remain. Sizing assumes the ~8-task shape of slices 1–3; slices marked **may split**
 are the ones most likely to exceed it.
 
-### 5 · Portfolio and transactions · phase 1 · may split
-`Portfolio` aggregate, holdings, buy/sell transactions, cost basis, realised and unrealised
-P&L, and the dashboard surface for them. Closes the largest gap between the README's product
-description and the running application. Likely splits backend/frontend.
+### 5b · Portfolio dashboard · phase 1
+The frontend half of the gap 5a's backend closed: a holdings table on the dashboard with
+live unrealised P&L derived client-side from the price stream (the ADR-007 pattern — no
+server-side price state to compute it against), the buy/sell form sending `Idempotency-Key`
+headers against the endpoint 5a built, transaction history, and the Playwright journey
+through it.
 
-*Depends on:* nothing outstanding. Could be built before slice 4 if product completeness
-matters more than the messaging story.
+*Depends on:* 5a (done) — an API that already works.
 
 ### 6 · Real market-data ingestion · phase 2
 Replace `FakeTickService` with a real feed behind Polly retry and circuit breaker, keeping
@@ -186,7 +188,7 @@ The README currently describes these as existing. They do not. Each needs buildi
 
 | Claim | Location | Resolution |
 |---|---|---|
-| `docs/adr/004-cqrs-scope.md` | README architecture | Slice 13, or write when CQRS scope is next revisited |
+| `docs/adr/004-cqrs-scope.md` | README architecture | **Resolved in 5a** — see [ADR-004](adr/004-cqrs-scope.md): MediatR commands/queries over one store, the fuller read-store and event-sourced alternatives named and rejected. The README's claim is corrected to match |
 | `docs/adr/005-captive-dependency-postmortem.md` | README | Slice 13 — requires the engineered incident to have happened |
 | `docs/adr/006-n-plus-one-postmortem.md` | README | Slice 7, where the N+1 is deliberately introduced and fixed |
 | `docs/adr/007-state-architecture.md` | README architecture | **Resolved in 4b** — see [ADR-007](adr/007-state-architecture.md): client state is the server cache, Zustand rejected. The README's claim is corrected to match |

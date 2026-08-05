@@ -6,10 +6,10 @@ Trophy-shaped: heaviest at integration, thin but present at unit and end-to-end.
 
 | Level | Tooling | Scope |
 |---|---|---|
-| Domain unit | xUnit | `Watchlist` invariants, `RandomWalk` bounds, `User` lockout, `RefreshToken` rotation, `AlertRule.Evaluate`'s truth table across both directions and boundary equality, its `MarkTriggered`/`Rearm` transitions and their illegal counterparts |
+| Domain unit | xUnit | `Watchlist` invariants, `RandomWalk` bounds, `User` lockout, `RefreshToken` rotation, `AlertRule.Evaluate`'s truth table across both directions and boundary equality, its `MarkTriggered`/`Rearm` transitions and their illegal counterparts, `Portfolio`'s average-cost re-averaging (a first buy, a second buy re-averaging, a sell realising P&L against the average while leaving it unchanged, selling to zero retaining history so a rebuy resets the basis), oversell and unknown-holding rejection, fractional-unit precision, and the `Version` counter incrementing on every accepted trade and staying put on a rejected one |
 | Application unit | xUnit + NSubstitute | Handler orchestration with a substituted repository, password policy, `TickBroadcaster`'s sink fan-out (including one sink throwing), `RabbitMqTickSink`'s non-blocking/single-flight reconnect behaviour and its disposal of the channel it replaces, `RabbitMqConsumerService`'s resubscribe-on-channel-shutdown loop (including that a subscribe failure never escapes `ExecuteAsync`), `RabbitMqEventPublisher`'s channel replacement and disposed-state guard, `AlertEvaluator`'s recovery from one rule losing a concurrency race, `OutboxDispatcher`'s publish-then-mark-dispatched ordering against a substituted `IEventPublisher` |
 | Architecture | xUnit + reflection | `Domain` references nothing outside the BCL; `MarketPulse.Application` references no messaging or web framework; `MarketPulse.Alerts` references no web framework; every CSRF-exempt hub declares no client-invokable methods |
-| Backend integration | WebApplicationFactory + Testcontainers | Real SQL Server **and RabbitMQ**, real migration, real HTTP; auth journeys, CSRF, rate limiting, cross-user isolation — now extended to alert rules and notifications; the alerts pipeline end to end (rule creation → crossing tick → outbox row → dispatch → idempotent consumption → per-user SignalR delivery), redelivery producing no duplicate, a poison message reaching the dead-letter queue, an alert naming a non-existent user reaching it too rather than requeueing forever, and — through a loopback proxy that severs and restores the link to the broker — a recovering connection surviving and a consumer resubscribing after an outage; and the chaos test (`ChaosTests.cs`, below) |
+| Backend integration | WebApplicationFactory + Testcontainers | Real SQL Server **and RabbitMQ**, real migration, real HTTP; auth journeys, CSRF, rate limiting, cross-user isolation — now extended to alert rules, notifications, portfolios and transactions; the alerts pipeline end to end (rule creation → crossing tick → outbox row → dispatch → idempotent consumption → per-user SignalR delivery), redelivery producing no duplicate, a poison message reaching the dead-letter queue, an alert naming a non-existent user reaching it too rather than requeueing forever, and — through a loopback proxy that severs and restores the link to the broker — a recovering connection surviving and a consumer resubscribing after an outage; the chaos test (`ChaosTests.cs`, below); the portfolio flow over HTTP (`PortfolioApiTests.cs` — buy then partial sell producing correct average cost and realised P&L, empty portfolio 200, oversell 422, unknown ticker and bad side 400s, transaction paging newest-first) and its EF round trip (`PortfolioPersistenceTests.cs` — owned collections, `RowVersion`/`Version` tokens, decimal precision surviving); stored-key idempotency (`IdempotencyTests.cs`, below); and the portfolio concurrency anomaly pair (`PortfolioConcurrencyAnomalyTests`, below) |
 | Frontend unit | Vitest | Stream reducer, zod schemas, `useNow`/`usePriceStream`/`PriceCell` hooks (stale-clock, initial-connect-failure), `useNotificationStream` (parse, cache prepend, reconnect dispatch — both hooks now share `features/realtime/reconnectPolicy`), `AlertCell` and `NotificationBell` behaviour, api-client CSRF and single-flight refresh |
 | Frontend integration | Vitest + RTL + MSW | Watchlist screen render, 409-duplicate error path, login error paths, protected-route redirect |
 | End-to-end | Playwright + Chromium | Four journeys through the real API and the production dashboard build, one of them (`alerts.spec.ts`) against the full alerts pipeline including a real Alerts worker and RabbitMQ |
@@ -57,6 +57,64 @@ retry dispatch until the row's own `DispatchedUtc` flips (not the dispatcher's r
 which is shared, cross-class state within `MessagingCollection` — see below); and assert
 exactly one notification row exists for the user, with a grace period to give a wrongly
 duplicated delivery time to land and fail the assertion if it does.
+
+## Idempotency
+
+`IdempotencyTests.cs` (`MarketPulse.IntegrationTests`) exercises `IdempotencyFilter` against
+both endpoints it guards, `POST /portfolio/transactions` and `POST /alerts`, over real HTTP:
+replaying a fresh key returns the stored response and records exactly one transaction; the
+same key with a different request body is rejected 422 `idempotency-key-reuse`; keys are
+scoped per user, so Alice's key never replays for Bob; a failed request stores nothing, so the
+same key is safe to retry after a 422 or 500; two concurrent requests racing one fresh key
+execute exactly once, with the loser reading the winner's stored response; and a request with
+no header at all executes normally every time, since the header is an offer, not a demand.
+Retention and stale-claim reclaim are not built in this slice (ADR-004's consequences record
+why) and so are not tested — see "Deliberately not tested," below.
+
+## Concurrency anomaly pair
+
+`PortfolioConcurrencyAnomalyTests` (`MarketPulse.IntegrationTests`) is the executable form of
+[ADR-004](adr/004-cqrs-scope.md)'s isolation-level discussion — the coverage map's
+"serializable vs read-committed demonstrated" claim made real against a running SQL Server
+rather than argued in prose.
+
+The obvious way to prove a lost update — two concurrent sells overselling a holding into
+negative units — turns out not to be reachable through this race. EF's owned-collection
+mapping writes `Holding.Units` as the aggregate's current absolute balance
+(`SET Units = @currentValue`), computed once in memory from whichever snapshot the context
+loaded, never a compounding `SET Units = Units - @amount`. Two racers validating against the
+same stale snapshot each compute a value that is, on its own, always within
+`[0, snapshot]` — whichever commits last simply overwrites with its own in-range number, so a
+literal negative balance is mathematically unreachable for any choice of amounts. Establishing
+this reframed what the test actually had to prove: not "the balance goes negative" but "a
+trade that correct, non-racing validation would have rejected is instead silently accepted,
+erasing the other trade's effect with no sign anything was lost."
+
+**Test (a)**, `Without_the_token_two_racing_sells_both_succeed_though_one_should_have_been_rejected`,
+proves exactly that. Two contexts load the same 10-unit holding; both sell (7 and 6 units)
+against that shared stale snapshot and both validate — 7 ≤ 10 and 6 ≤ 10 — even though
+7 + 6 = 13 exceeds the 10 ever held, so a correctly serialised pair could never both succeed.
+The first commit lands normally. The proof step replays the second racer's *exact* trade
+against the state the first commit actually left behind — a fresh, honest read, no bypass — and
+it is rejected with `InsufficientHoldingsException`: that is what should have stopped the
+second sell. The bypass — handing the second context the winner's current `RowVersion` so its
+`UPDATE`'s `WHERE` clause matches, standing in for what every write would look like without the
+token — lets it commit anyway: units land at 4 (10 − 6) rather than 3 (10 − 7), the first
+sell's effect gone without a trace, and `Portfolio.Version` shows the same lost update (both
+racers incremented from 1, landing at 2 instead of the 3 a correctly serialised pair would
+reach).
+
+**Test (b)**, `With_the_token_the_second_sell_loses_with_a_concurrency_exception`, removes the
+bypass. The identical race — two contexts, two racing sells, no token manipulation — now
+throws `DbUpdateConcurrencyException` on the loser's `SaveChangesAsync`, which
+`ExceptionHandlingMiddleware` maps to 409 `concurrent-update` on the real API path; the
+winner's state is correct and untouched.
+
+The pair only works because of `Portfolio.Version` (ADR-004, decision 2): a buy/sell mutates a
+`Holding`, a separate table via the owned-collection mapping, so without a scalar on the
+`Portfolios` row that changes on every trade, nothing would ever force an `UPDATE` against that
+row — and `RowVersion`, checked only on that `UPDATE`, would never enter a trade's `WHERE`
+clause at all. Without `Version`, test (b) would not throw.
 
 ## End-to-end
 
@@ -131,6 +189,13 @@ the backend and frontend jobs, and uploads a report artifact on failure.
   double-notification bug — is exercised by forcing a concurrency conflict inside one test
   process (`Two_concurrent_evaluations_of_one_rule_produce_one_outbox_row`), not by running
   two worker processes against each other in CI.
+- **No idempotency-key retention or expiry test.** Neither is built in this slice —
+  `IdempotencyKeys` rows live forever, and a claim orphaned by a hard crash between claim and
+  completion has no reclaim path — so there is nothing to test against; both are named as a
+  deferred operations concern in ADR-004's consequences.
+- **No unrealised P&L test.** It does not exist server-side by design (the server holds no
+  current price to compute it against — see ADR-004's context and the 5a spec's decision
+  table); 5b derives it client-side from the live price stream and will test it there.
 
 ## Shared-fixture determinism
 
