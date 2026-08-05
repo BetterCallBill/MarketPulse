@@ -158,7 +158,7 @@ packages/emitter        # Standalone ES module event emitter
 | Feature | Description |
 |---|---|
 | **Live price board** | Real-time grid via SignalR/WebSocket; server-side ingestion fans out price ticks |
-| **Watchlist & portfolio** | CRUD watchlist; portfolio backend (5a) — buy/sell transactions with idempotency keys, average-cost basis, realised P&L; dashboard surface and client-side unrealised P&L land in 5b |
+| **Watchlist & portfolio** | CRUD watchlist; portfolio backend (5a) — buy/sell transactions with idempotency keys, average-cost basis, realised P&L; dashboard (5b) — `/portfolio` route, holdings table with unrealised P&L derived at render from the live price stream (em-dash for a price that hasn't ticked), a trade form that mints a submission-scoped idempotency key on every deliberate submission, transaction history with load-more |
 | **Price alerts** | Threshold alerts evaluated server-side by the Alerts microservice via RabbitMQ |
 | **Historical charts** | Lazy-loaded charting; Dapper-backed history queries with `stale-while-revalidate` caching |
 | **Portfolio notes** | Rich-text notes per holding, sanitised with DOMPurify |
