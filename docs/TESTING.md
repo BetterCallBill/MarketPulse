@@ -30,8 +30,9 @@ never-rehearsed manual done-criteria, and the test the README's headline claim �
 that survives a broker outage — was waiting for. One test class, composing the **real
 processes**: the API via `WebApplicationFactory` (rule CRUD, the tick feed into the broker,
 `AlertTriggeredConsumer` writing notification rows) and the Alerts worker's own hosted
-services — `PriceConsumer` and `AlertEvaluator`, built exactly as `MarketPulse.Alerts`'s
-`Program.cs` composes them — against Testcontainers SQL Server and RabbitMQ. `RabbitMqFixture`
+`PriceConsumer` — with its scoped `AlertEvaluator` collaborator invoked per tick, composed
+exactly as `MarketPulse.Alerts`'s `Program.cs` composes it — against Testcontainers SQL
+Server and RabbitMQ. `RabbitMqFixture`
 binds the container to an OS-allocated free host port up front, rather than an
 auto-assigned one: Docker Desktop does not reliably preserve an ephemeral host port across a
 stop/start cycle on the same container, and a reassigned port would strand every client's
