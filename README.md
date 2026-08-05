@@ -123,7 +123,7 @@ packages/emitter        # Standalone ES module event emitter
   and components may reference only the semantic layer for colour — enforced by a test, not
   convention. Contrast ratios are computed against WCAG AA in CI rather than eyeballed. See
   [ADR-008](docs/adr/008-design-tokens.md)
-- **Two-layer state architecture:** server state in TanStack Query, client/UI state in Zustand — rationale in [ADR-007](docs/adr/007-state-architecture.md)
+- **TanStack Query as the single client-side state layer:** live data patched into the query cache over SignalR — rationale in [ADR-007](docs/adr/007-state-architecture.md)
 - Components never call `fetch` directly — all data access flows through `packages/api-client`
 
 ### Messaging — eventual consistency done properly
@@ -144,7 +144,7 @@ packages/emitter        # Standalone ES module event emitter
 | **Backend** | .NET 10, ASP.NET Core, MediatR, FluentValidation, SignalR |
 | **Data** | SQL Server (RDS), EF Core 10, Dapper (read-heavy paths) |
 | **Messaging** | RabbitMQ, outbox pattern, Polly |
-| **Frontend** | React 18, TypeScript (strict), Vite, TanStack Query, Zustand, zod |
+| **Frontend** | React 18, TypeScript (strict), Vite, TanStack Query, zod |
 | **Design system** | Design tokens, CSS Modules, @tanstack/react-virtual |
 | **Testing** | xUnit, NSubstitute, WebApplicationFactory, Testcontainers, Vitest, RTL, MSW, Playwright |
 | **Cloud** | AWS — ECS Fargate, Lambda, RDS, S3 + CloudFront, Secrets Manager, IAM |
@@ -219,7 +219,7 @@ packages/emitter        # Standalone ES module event emitter
 **Where:** `apps/dashboard/`
 
 - **Rendering model:** dozens of live-updating price cells; `React.memo` boundaries and stable selectors chosen from **profiler data**, before/after documented
-- **State management:** TanStack Query (server cache, optimistic updates, invalidation) + Zustand (UI state) — deliberate two-layer split
+- **State management:** TanStack Query as the single client-side state layer — server cache, optimistic updates, invalidation, and live SignalR pushes patched into the same cache; no separate client-state store (ADR-007)
 - **Hooks/lifecycle:** `usePriceStream`, `useAsync`, `useDebouncedValue` with strict cleanup discipline
 - **Performance patterns:** list virtualisation on the watchlist (`@tanstack/react-virtual`)
 
@@ -270,7 +270,7 @@ packages/emitter        # Standalone ES module event emitter
 
 - **Backend:** Clean/Onion layering, CQRS via MediatR (with an honest "where it was overkill" ADR), DDD-lite aggregates, SOLID and dependency inversion enforced by project references
 - **The flagship decision:** modular monolith + one extracted microservice — both sides of the trade-off defensible from experience
-- **Frontend:** feature-sliced monorepo, token-driven design system, API-layer package, deliberate state architecture (server cache / client state / URL state)
+- **Frontend:** feature-sliced monorepo, token-driven design system, API-layer package, a deliberate state architecture with one layer rather than several — server cache only, a rejected second layer documented in [ADR-007](docs/adr/007-state-architecture.md)
 - **Micro-frontends:** Module Federation spike extracting the alerts UI — minimal but real
 - **When *not* to use patterns:** every ADR includes a "rejected alternatives" section
 

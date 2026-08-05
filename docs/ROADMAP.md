@@ -33,18 +33,21 @@ against the source tree, not against documentation.
 |---|---|---|---|
 | 1 · Backend foundation | **Partial** | Clean Architecture layering (enforced by `DependencyRuleTests`), EF Core + 3 migrations, cookie auth with refresh-token rotation, CSRF, auth rate limiting, watchlist CRUD | Portfolio aggregate, holdings, transactions |
 | 2 · Real-time core | **Partial** | SignalR hub + fan-out, `PriceTickChannel`, tick delivery to the dashboard | Real market-data feed (ticks come from `FakeTickService`, a random walk), tick persistence, Dapper history queries |
-| 3 · Messaging & alerts | **Partial** | RabbitMQ, the outbox, the Alerts worker, alert rules, notifications, per-user delivery | Alerts UI, the chaos test |
-| 4 · Frontend core | **Partial** | `packages/ui` token system + primitives, `packages/api-client` (zod-validated, no direct `fetch` anywhere in the app), TanStack Query for server state, auth screens, watchlist table with live price cells | Client-state layer (no Zustand — ADR-007's "two-layer" claim is currently half-true), alerts and notifications UI |
+| 3 · Messaging & alerts | **Done** | RabbitMQ, the outbox, the Alerts worker, alert rules, notifications, per-user delivery, and the chaos test proving zero lost alerts across a broker kill/restart | — |
+| 4 · Frontend core | **Partial** | `packages/ui` token system + primitives, `packages/api-client` (zod-validated, no direct `fetch` anywhere in the app), TanStack Query for server state, auth screens, watchlist table with live price cells, alerts and notifications UI (inline rule control, notifications panel) | ADR-007 written: server cache only |
 | 5 · Cloud & pipeline | **Not started** | CI runs backend tests, frontend tests, and Playwright E2E against a real database | Terraform, ECS, CloudFront/S3, Lambda snapshot, OpenTelemetry, deployment pipeline |
 | 6 · Hardening | **Not started** | Testcontainers integration suite, one E2E journey (authentication) | CSP, threat model, performance pass, RUM, load test, the documentation set |
 
-Two phases untouched, four partly built.
+Two phases untouched, three partly built, one done.
 
-Phase 4's remainder has no slice of its own: the alerts and notifications UI lands in 4b, and
-the client-state layer lands in whichever slice first needs state that is genuinely not server
-cache. 4b's unread-notification handling is the likely trigger. If nothing ever needs it,
-Zustand should not be added merely to satisfy ADR-007 — the ADR should be rewritten to
-describe what the application actually does.
+Phase 4's remainder had no slice of its own: the alerts and notifications UI landed in 4b, and
+took the client-state question with it. 4b's unread-notification handling was the trigger the
+previous version of this section predicted, and it resolved the other way that prediction
+allowed for — unread state turned out to be server state already exposed by the API
+(`IsRead`, `POST /api/v1/notifications/{id}/read`), not a genuine client-owned value, so
+nothing needed a second store. Zustand was not added merely to satisfy ADR-007; the ADR was
+rewritten instead, to describe what the application actually does — see
+[ADR-007](adr/007-state-architecture.md).
 
 ---
 
@@ -56,51 +59,49 @@ describe what the application actually does.
 | 2 · Authentication | 2026-08-03 | Cookie sessions, refresh-token rotation, CSRF middleware, rate limiting, cross-user isolation tests, E2E auth journey |
 | 3 · Design system | 2026-08-03 | `packages/ui` two-layer design tokens, six primitives, dashboard restyle, contrast ratios asserted in CI |
 | 4a · Alerts pipeline — backend | 2026-08-04 | RabbitMQ topology, transactional outbox, the `MarketPulse.Alerts` worker, alert rule CRUD, per-user notification delivery over `NotificationHub`, ADR-009. Proven end to end by integration tests against real SQL Server and real RabbitMQ. No dashboard changes |
+| 4b · Alerts UI and chaos test | 2026-08-05 | `features/alerts` (inline rule control on watchlist rows) and `features/notifications` (bell badge, dropdown panel, mark-read-on-open) on `packages/ui`; `useNotificationStream` patching SignalR pushes into the TanStack Query cache; ADR-007 (client state is the server cache — Zustand rejected); the `alerts.spec.ts` Playwright journey with the Alerts worker spawned from global-setup; `ChaosTests.cs`, the chaos test that stops RabbitMQ between a rule triggering and its outbox row dispatching and proves exactly one notification survives the restart. Two of 4a's carried-over review findings fixed along the way |
+
+#### 4a review findings: resolved and outstanding
+
+4a's review deferred five findings, none blocking, recorded in this document because slice
+ledgers live in gitignored `.superpowers/` and do not survive the branch. Two landed as fixes
+in 4b, while the messaging code they touch was still fresh:
+
+- **Fixed.** `RabbitMqEventPublisher.DisposeAsync` now takes `_gate` before disposing it —
+  publisher disposal is serialised against an in-flight `PublishAsync`, copying the shape
+  `RabbitMqConnection` already used, and the code comment's claim now matches what it delivers.
+- **Fixed.** `RabbitMqConsumerService` now keeps a floor of one delay after a
+  shutdown-triggered resubscribe, so a channel that died immediately after a successful
+  subscribe cannot re-loop with no backoff.
+
+Of the remaining three, one has a new home and two stay recorded here, both non-blocking:
+
+- **The transient requeue loop is still unbounded.** Its home is the observability slice (8):
+  distinguishing a slow-burning transient fault from a permanent one needs a redelivery
+  counter or a delayed retry queue, and somewhere to see it happening — named in the 4a spec,
+  ADR-009's consequences, and again in slice 8's entry below.
+- A channel can still be disposed under an in-flight `HandleAsync`, whose subsequent ack then
+  throws. At-least-once is preserved (the delivery was never acked and the channel is dead
+  anyway); the effect is log noise. No slice owns this; it remains recorded here.
+- `BrokerOutageTests` still leaves a durable randomly-named queue and binding per run. The
+  broker container is per-run, so it self-cleans; hygiene only, no slice owns this either.
+
+4a's spec also left its manual done-criteria unrehearsed — starting both processes by hand,
+watching a real alert fire, and stopping/restarting the broker to see the outbox flush. A
+pre-existing SQL Server container blocked `docker compose up` at the time. `ChaosTests.cs` is
+that rehearsal automated: a real API host and real worker services (`PriceConsumer` hosted;
+`OutboxDispatcher` driven by hand through its public `DispatchPendingAsync` seam, deliberately
+not hosted, so the broker can be stopped deterministically inside the Triggered→dispatched
+window) against Testcontainers SQL Server and RabbitMQ, the broker container stopped and
+restarted mid-flow, asserting the outbox row survives and dispatches exactly once after
+restart.
 
 ---
 
 ## Remaining slices
 
-Ten slices remain. Sizing assumes the ~8-task shape of slices 1–3; slices marked **may split**
+Nine slices remain. Sizing assumes the ~8-task shape of slices 1–3; slices marked **may split**
 are the ones most likely to exceed it.
-
-### 4b · Alerts UI and chaos test · phase 3
-Alert management and notifications panel built on `packages/ui`, unread state, Playwright
-journey (set alert → price crosses → notification appears), and the chaos test that kills
-RabbitMQ mid-flow and proves zero lost alerts.
-
-*Depends on:* 4a. **The README's headline claim — alerts that survive an outage — is not
-substantiated until this slice lands.**
-
-#### Carried over from 4a
-
-4a's reviews deferred five findings, none blocking, recorded here because slice ledgers live
-in gitignored `.superpowers/` and do not survive the branch. The first two are the ones worth
-fixing while the messaging code is still fresh:
-
-- **`RabbitMqEventPublisher.DisposeAsync` does not take `_gate` before disposing it.** The
-  `_disposed` flag narrows the race with a concurrent `PublishAsync` but does not close it, so
-  a caller past the flag check can still meet a disposed semaphore. `RabbitMqConnection` does
-  this correctly — copy its shape. The code comment currently claims a guarantee slightly
-  stronger than what it delivers.
-- **`RabbitMqConsumerService` resets its retry delay to zero on a successful subscribe**, so a
-  channel that died immediately after every successful subscribe would re-loop with no backoff.
-  No message-driven path can close a channel deterministically today, so this is theoretical —
-  a floor of one delay after a shutdown-triggered resubscribe removes the class.
-- A channel can be disposed under an in-flight `HandleAsync`, whose subsequent ack then throws.
-  At-least-once is preserved (the delivery was never acked and the channel is dead anyway); the
-  effect is log noise.
-- **The transient requeue loop is still unbounded.** Already named in the 4a spec and ADR-009 as
-  observability-slice work: distinguishing a slow-burning transient fault from a permanent one
-  needs a redelivery counter or a delayed retry queue, and somewhere to see it happening.
-- `BrokerOutageTests` leaves a durable randomly-named queue and binding per run. The broker
-  container is per-run, so it self-cleans; hygiene only.
-
-**Also outstanding from 4a:** its spec's manual done-criteria were never rehearsed — starting
-both processes by hand, watching a real alert fire, and stopping/restarting the broker to see
-the outbox flush. A pre-existing SQL Server container blocked `docker compose up` at the time.
-The automated suite covers the behaviour, including a real broker-severance test, but the
-hand-run rehearsal is exactly what 4b's chaos test automates, so it lands naturally here.
 
 ### 5 · Portfolio and transactions · phase 1 · may split
 `Portfolio` aggregate, holdings, buy/sell transactions, cost basis, realised and unrealised
@@ -127,7 +128,9 @@ deliberate N+1 postmortem (ADR-006) and the SQL execution-plan analysis in `docs
 ### 8 · Observability · phase 5
 OpenTelemetry traces and metrics, Serilog structured logging built out from the existing
 `CorrelationIdMiddleware`, health checks, dashboards. Wanted before deployment, so that the
-first production incident is diagnosable.
+first production incident is diagnosable. Also where the consumer's unbounded transient
+requeue loop (carried over from 4a, still open after 4b) gets a redelivery counter or a
+delayed retry queue — and somewhere to see it happening, which is the point of this slice.
 
 *Depends on:* nothing outstanding.
 
@@ -156,8 +159,9 @@ BenchmarkDotNet suite, documented load test to the p95 < 200ms criterion, index 
 *Depends on:* 10 for a realistic environment to measure.
 
 ### 13 · Documentation backfill · phase 6
-The missing ADRs (004 CQRS scope, 005 captive-dependency postmortem, 006 N+1 postmortem,
-007 state architecture), `docs/api-style-guide.md`, and the six engineering write-ups.
+The missing ADRs (004 CQRS scope, 005 captive-dependency postmortem, 006 N+1 postmortem —
+007 state architecture was written early, in 4b), `docs/api-style-guide.md`, and the six
+engineering write-ups.
 
 *Depends on:* the slices whose decisions they record. Some ADRs should be written earlier,
 alongside the work — see the register below.
@@ -185,7 +189,7 @@ The README currently describes these as existing. They do not. Each needs buildi
 | `docs/adr/004-cqrs-scope.md` | README architecture | Slice 13, or write when CQRS scope is next revisited |
 | `docs/adr/005-captive-dependency-postmortem.md` | README | Slice 13 — requires the engineered incident to have happened |
 | `docs/adr/006-n-plus-one-postmortem.md` | README | Slice 7, where the N+1 is deliberately introduced and fixed |
-| `docs/adr/007-state-architecture.md` | README architecture | Write when the client-state layer lands, or rewrite to describe server cache alone if it never does. The "TanStack Query + Zustand" claim is currently half-true: Zustand is not a dependency |
+| `docs/adr/007-state-architecture.md` | README architecture | **Resolved in 4b** — see [ADR-007](adr/007-state-architecture.md): client state is the server cache, Zustand rejected. The README's claim is corrected to match |
 | `docs/PERFORMANCE.md` | README docs index | Slice 12 |
 | `docs/THREAT-MODEL.md` | README docs index | Slice 11 |
 | `docs/api-style-guide.md` | README docs index | Slice 13 |
@@ -196,5 +200,5 @@ The README currently describes these as existing. They do not. Each needs buildi
 | `packages/emitter` | README frontend structure | **Unscheduled** — no phase covers it; likely delete the claim |
 | Storybook | README frontend structure | Already annotated "not yet" in the README; no phase covers it |
 
-Ten of these are dead links in the README today. Until each is resolved, the README should
+Nine of these are dead links in the README today. Until each is resolved, the README should
 mark them as planned rather than present them as description.
