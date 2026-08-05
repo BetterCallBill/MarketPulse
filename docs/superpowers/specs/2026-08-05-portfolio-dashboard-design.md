@@ -75,6 +75,21 @@ unchanged) and `/portfolio`, both under `ProtectedRoute`.
   server). A trade invalidation resets history to its first page — the new trade is by
   definition at the top, and reconciling a fresh head against stale deeper pages is
   complexity with no reader.
+
+  *Amended 2026-08-05, during implementation.* The first cut of this hook implemented
+  "keeps an accumulated list keyed by pages" as a single query whose `take` grew with each
+  load-more (`take = pages × pageSize`, `skip` fixed at 0). That window hits
+  `GetTransactionsQuery`'s server-side cap (`Take ∈ [1,100]`) at the sixth default-sized
+  load-more — `take=120` — which the server 400s. The failure was silent: `keepPreviousData`
+  kept the old rows on screen, the resulting short/failed page read as "history exhausted"
+  rather than "request rejected", and rows past 100 became permanently unreachable with no
+  error shown. The fix is `useTransactions` on `useInfiniteQuery`: each page is its own
+  request at `skip = itemsFetchedSoFar, take = pageSize`, so `take` never grows past
+  `pageSize` regardless of how many pages are loaded. The hook now also returns `isError`,
+  which it did not before — the same silent-failure bug independently let a failed *initial*
+  fetch render as `TransactionHistory`'s empty state ("No trades recorded yet.") rather than
+  an error, which the `isError` addition and the component's new error branch both close. See
+  `docs/TESTING.md` for the cap-safety test this proved out.
 - `useRecordTransaction` — mutation calling `recordTransaction(trade, key)`; on success
   invalidates `['portfolio']` **and** `['transactions']`. The 201 body carries the updated
   portfolio and could seed `setQueryData`, but one invalidation path was chosen over two
@@ -99,6 +114,16 @@ unchanged) and `/portfolio`, both under `ProtectedRoute`.
 - The form's submit button disables while pending. Native constraint validation (`required`,
   `min`, `step`) on units and price, the AlertCell precedent — jsdom-guarded in tests the
   same way.
+
+  *Amended 2026-08-05, during implementation.* Retry was originally gated on `status === 409`
+  alone. A network failure (the `fetch` promise itself rejecting — no response, so no status)
+  is the *other* ambiguous outcome the idempotency key exists for: the client never learned
+  whether the request landed. Gating Retry on 409 only left the user's sole recourse to a new
+  submission with a fresh key, which duplicates the trade if the original had in fact
+  committed. The rule is now: retry with the *same* key whenever the outcome is unknown or
+  explicitly retryable — 409, or any error with no HTTP status. A definitive 4xx/5xx-with-
+  status (`unknown-ticker`, `insufficient-holdings`, etc.) stays non-retryable, since
+  resending it would just repeat the same rejection.
 
 ## Testing
 
