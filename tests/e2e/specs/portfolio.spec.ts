@@ -29,8 +29,14 @@ test('a buy and a higher sell produce correct holdings, P&L, and history', async
   await page.getByRole('button', { name: 'Record trade' }).click();
 
   const row = page.getByRole('row', { name: /IVV/ });
-  await expect(row).toContainText('10');
-  await expect(row).toContainText('$60.00'); // average cost
+  // Cell order per HoldingsTable's <thead>: Ticker, Units, Avg cost, Last, Realised P&L,
+  // Unrealised P&L. A row-wide toContainText('6') after the sell would be silently
+  // satisfied by the avg-cost cell's "$60.00" even if units never decremented — so units
+  // get their own cell, scoped and exact, not a row-wide substring.
+  const unitsCell = row.getByRole('cell').nth(1);
+  const avgCostCell = row.getByRole('cell').nth(2);
+  await expect(unitsCell).toHaveText('10');
+  await expect(avgCostCell).toHaveText('$60.00'); // average cost
 
   // Sell 4 @ 70 → realised 4 × (70 − 60) = +$40; 6 units remain at avg 60.
   await page.getByLabel('Ticker').fill('IVV');
@@ -39,7 +45,12 @@ test('a buy and a higher sell produce correct holdings, P&L, and history', async
   await page.getByLabel('Price', { exact: true }).fill('70');
   await page.getByRole('button', { name: 'Record trade' }).click();
 
-  await expect(row).toContainText('6');
+  // Row-wide toContainText('6') would also be satisfied by the '$60.00' avg-cost cell
+  // regardless of whether units ever decremented — cell-scoped so this is a real check.
+  await expect(unitsCell).toHaveText('6');
+  // Average cost is unchanged by a sell (only realised P&L moves) — the partial-sell
+  // invariant, checked in the state the scenario is actually about.
+  await expect(avgCostCell).toHaveText('$60.00');
   await expect(row).toContainText('+$40.00');
 
   // The live price cell fills from the stream — same tolerant first-tick assertion as
