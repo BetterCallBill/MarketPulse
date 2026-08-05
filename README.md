@@ -133,7 +133,7 @@ packages/emitter        # Standalone ES module event emitter
   `Notifications.MessageId`, enforced by the database rather than a read-then-write that would
   race itself; redelivery is safe. The Alerts worker needs no message-ID dedupe of its own: a
   redelivered tick finds the rule no longer `Active` and does nothing
-- **Resilience:** Polly retry + circuit breaker around the external market data feed (**slice 6, not yet built** — ticks still come from `FakeTickService`) and a chaos test (`ChaosTests.cs`) that stops RabbitMQ mid-flow — after a rule fires, before its outbox row dispatches — and proves the row survives and dispatches exactly once after the broker restarts
+- **Resilience:** Polly retry with jitter + circuit breaker + per-attempt timeout around the real Yahoo Finance market-data feed (`YahooPriceFeedService`, slice 6 — see [ADR-010](docs/adr/010-market-data-feed.md)), selected by `MarketData:Source`; `FakeTickService` stays the default for tests and offline development, and there is deliberately no fallback to it if the real feed fails — and a chaos test (`ChaosTests.cs`) that stops RabbitMQ mid-flow — after a rule fires, before its outbox row dispatches — and proves the row survives and dispatches exactly once after the broker restarts
 
 ---
 
@@ -283,7 +283,7 @@ packages/emitter        # Standalone ES module event emitter
 - **Outbox pattern:** domain events persisted transactionally, relayed by a background dispatcher
 - **Idempotent consumers:** dedupe on message ID; redelivery-safe by design
 - **Eventual consistency:** alert notification flow documented end-to-end
-- **Resilience:** Polly retry with jitter + circuit breaker around the external feed (**slice 6, not yet built**); a **chaos test** (`ChaosTests.cs`, slice 4b) composes the real API host and the real Alerts worker against Testcontainers SQL Server and RabbitMQ, stops the broker container between a rule firing and its outbox row dispatching, restarts it, and asserts exactly one notification survives — 4a built the outbox and the dead-letter path that make recovery possible, and this is the test that proves it
+- **Resilience:** Polly retry with jitter + circuit breaker + per-attempt timeout around the real Yahoo Finance feed (slice 6, [ADR-010](docs/adr/010-market-data-feed.md)) — retry on transient failures, breaker opens on sustained ones and fails fast, no fallback to the fake tick source when it's down; a **chaos test** (`ChaosTests.cs`, slice 4b) composes the real API host and the real Alerts worker against Testcontainers SQL Server and RabbitMQ, stops the broker container between a rule firing and its outbox row dispatching, restarts it, and asserts exactly one notification survives — 4a built the outbox and the dead-letter path that make recovery possible, and this is the test that proves it
 
 #### 12. Cloud & DevOps
 

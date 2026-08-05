@@ -113,7 +113,7 @@ packages/emitter        # Standalone ES module event emitter
 
 - **Outbox pattern** on the publisher: domain events written transactionally with state, relayed to RabbitMQ by a background dispatcher
 - **Idempotent consumers:** the Alerts service dedupes on message ID; redelivery is safe
-- **Resilience:** Polly retry + circuit breaker around the external market data feed; chaos test kills RabbitMQ mid-flow and verifies recovery
+- **Resilience:** Polly retry with jitter + circuit breaker + per-attempt timeout around the real Yahoo Finance market-data feed ([ADR-010](docs/adr/010-market-data-feed.md)) — `FakeTickService` remains the default for tests and offline development, with no fallback to it if the real feed fails; chaos test kills RabbitMQ mid-flow and verifies recovery
 
 ---
 
