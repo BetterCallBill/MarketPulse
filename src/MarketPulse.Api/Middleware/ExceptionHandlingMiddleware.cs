@@ -1,6 +1,7 @@
 using FluentValidation;
 using MarketPulse.Domain.Exceptions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace MarketPulse.Api.Middleware;
 
@@ -23,6 +24,13 @@ public sealed class ExceptionHandlingMiddleware(
             }
 
             await WriteAsync(context, ex.StatusCode, ex.ErrorCode, ex.Message);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Two writes raced the same portfolio (or rule) and this one lost. The client
+            // re-reads and retries; its sell may now legitimately fail validation instead.
+            await WriteAsync(context, StatusCodes.Status409Conflict,
+                "concurrent-update", "The resource was modified concurrently. Retry.");
         }
         catch (UnauthorizedAccessException)
         {
