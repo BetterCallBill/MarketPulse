@@ -123,7 +123,7 @@ packages/emitter        # Standalone ES module event emitter
   and components may reference only the semantic layer for colour — enforced by a test, not
   convention. Contrast ratios are computed against WCAG AA in CI rather than eyeballed. See
   [ADR-008](docs/adr/008-design-tokens.md)
-- **Two-layer state architecture:** server state in TanStack Query, client/UI state in Zustand — rationale in [ADR-007](docs/adr/007-state-architecture.md)
+- **TanStack Query as the single client-side state layer:** live data patched into the query cache over SignalR — rationale in [ADR-007](docs/adr/007-state-architecture.md)
 - Components never call `fetch` directly — all data access flows through `packages/api-client`
 
 ### Messaging — eventual consistency done properly
@@ -133,7 +133,7 @@ packages/emitter        # Standalone ES module event emitter
   `Notifications.MessageId`, enforced by the database rather than a read-then-write that would
   race itself; redelivery is safe. The Alerts worker needs no message-ID dedupe of its own: a
   redelivered tick finds the rule no longer `Active` and does nothing
-- **Resilience:** Polly retry + circuit breaker around the external market data feed (**slice 6, not yet built** — ticks still come from `FakeTickService`) and a chaos test that kills RabbitMQ mid-flow and verifies recovery (**slice 4b, not yet built**)
+- **Resilience:** Polly retry + circuit breaker around the external market data feed (**slice 6, not yet built** — ticks still come from `FakeTickService`) and a chaos test (`ChaosTests.cs`) that stops RabbitMQ mid-flow — after a rule fires, before its outbox row dispatches — and proves the row survives and dispatches exactly once after the broker restarts
 
 ---
 
@@ -144,7 +144,7 @@ packages/emitter        # Standalone ES module event emitter
 | **Backend** | .NET 10, ASP.NET Core, MediatR, FluentValidation, SignalR |
 | **Data** | SQL Server (RDS), EF Core 10, Dapper (read-heavy paths) |
 | **Messaging** | RabbitMQ, outbox pattern, Polly |
-| **Frontend** | React 18, TypeScript (strict), Vite, TanStack Query, Zustand, zod |
+| **Frontend** | React 18, TypeScript (strict), Vite, TanStack Query, zod |
 | **Design system** | Design tokens, CSS Modules, @tanstack/react-virtual |
 | **Testing** | xUnit, NSubstitute, WebApplicationFactory, Testcontainers, Vitest, RTL, MSW, Playwright |
 | **Cloud** | AWS — ECS Fargate, Lambda, RDS, S3 + CloudFront, Secrets Manager, IAM |
@@ -219,7 +219,7 @@ packages/emitter        # Standalone ES module event emitter
 **Where:** `apps/dashboard/`
 
 - **Rendering model:** dozens of live-updating price cells; `React.memo` boundaries and stable selectors chosen from **profiler data**, before/after documented
-- **State management:** TanStack Query (server cache, optimistic updates, invalidation) + Zustand (UI state) — deliberate two-layer split
+- **State management:** TanStack Query as the single client-side state layer — server cache, optimistic updates, invalidation, and live SignalR pushes patched into the same cache; no separate client-state store (ADR-007)
 - **Hooks/lifecycle:** `usePriceStream`, `useAsync`, `useDebouncedValue` with strict cleanup discipline
 - **Performance patterns:** list virtualisation on the watchlist (`@tanstack/react-virtual`)
 
@@ -270,7 +270,7 @@ packages/emitter        # Standalone ES module event emitter
 
 - **Backend:** Clean/Onion layering, CQRS via MediatR (with an honest "where it was overkill" ADR), DDD-lite aggregates, SOLID and dependency inversion enforced by project references
 - **The flagship decision:** modular monolith + one extracted microservice — both sides of the trade-off defensible from experience
-- **Frontend:** feature-sliced monorepo, token-driven design system, API-layer package, deliberate state architecture (server cache / client state / URL state)
+- **Frontend:** feature-sliced monorepo, token-driven design system, API-layer package, a deliberate state architecture with one layer rather than several — server cache only, a rejected second layer documented in [ADR-007](docs/adr/007-state-architecture.md)
 - **Micro-frontends:** Module Federation spike extracting the alerts UI — minimal but real
 - **When *not* to use patterns:** every ADR includes a "rejected alternatives" section
 
@@ -283,7 +283,7 @@ packages/emitter        # Standalone ES module event emitter
 - **Outbox pattern:** domain events persisted transactionally, relayed by a background dispatcher
 - **Idempotent consumers:** dedupe on message ID; redelivery-safe by design
 - **Eventual consistency:** alert notification flow documented end-to-end
-- **Resilience:** Polly retry with jitter + circuit breaker around the external feed; a **chaos test** kills RabbitMQ mid-flow and asserts recovery — **slice 4b, not yet built.** This slice built the outbox and the dead-letter path that make recovery possible; the chaos test is what proves it
+- **Resilience:** Polly retry with jitter + circuit breaker around the external feed (**slice 6, not yet built**); a **chaos test** (`ChaosTests.cs`, slice 4b) composes the real API host and the real Alerts worker against Testcontainers SQL Server and RabbitMQ, stops the broker container between a rule firing and its outbox row dispatching, restarts it, and asserts exactly one notification survives — 4a built the outbox and the dead-letter path that make recovery possible, and this is the test that proves it
 
 #### 12. Cloud & DevOps
 
@@ -375,14 +375,15 @@ marketpulse-pro/
 
 ### What actually runs today
 
-These commands are the real, runnable path on this branch, through slice 4a — the alerts
-pipeline's backend. `docker compose up -d` now starts SQL Server **and** RabbitMQ, and the
-Alerts worker is a real, separately-run project that evaluates rules and dispatches the
-outbox. What is still missing is the alerts and notifications **UI**: there is no page in
-the dashboard to create a rule or see a notification yet, because that is slice 4b.
-Exercising the pipeline end to end today means calling the API directly
-(`POST /api/v1/alerts`) and connecting a SignalR client to `/hubs/notifications`, not
-clicking through the dashboard.
+These commands are the real, runnable path on this branch, through slice 4b — the alerts
+pipeline's backend (4a) plus its UI and chaos test (4b). `docker compose up -d` starts SQL
+Server **and** RabbitMQ, and the Alerts worker is a real, separately-run project that
+evaluates rules and dispatches the outbox. The dashboard now has the alerts and
+notifications UI: an inline control on each watchlist row to set a threshold alert, and a
+bell in the header that opens a panel of notifications as they arrive over SignalR.
+Exercising the pipeline end to end today means clicking through the dashboard — set an alert
+below the current price, watch it flip to Triggered on the next tick, and see the
+notification land in the panel — not calling the API directly.
 
 ```bash
 # 1. Start infrastructure (SQL Server + RabbitMQ)
@@ -499,7 +500,7 @@ deliberate.
 - [ ] Zero critical axe accessibility violations
 - [ ] CSP with no `unsafe-inline` in production
 - [ ] Backend integration tests run against **real** SQL Server + RabbitMQ (Testcontainers) in CI
-- [ ] Chaos test: RabbitMQ outage recovers with zero lost alerts
+- [x] Chaos test: RabbitMQ outage recovers with zero lost alerts
 - [ ] p95 API latency < 200ms under ingestion load (documented load test)
 - [ ] Every significant decision has an ADR with rejected alternatives
 - [ ] Six engineering write-ups documented with real metrics

@@ -28,8 +28,39 @@ export const sessionSchema = z.object({
   email: z.string(),
 });
 
+export const alertDirectionSchema = z.enum(['Above', 'Below']);
+
+export const alertRuleSchema = z.object({
+  id: z.string(),
+  ticker: z.string().min(1).max(8),
+  direction: alertDirectionSchema,
+  threshold: z.number().positive(),
+  status: z.enum(['Active', 'Triggered']),
+  createdUtc: z.string(),
+  triggeredUtc: z.string().nullable(),
+  triggeredPrice: z.number().nullable(),
+});
+
+export const notificationSchema = z.object({
+  id: z.string(),
+  alertRuleId: z.string(),
+  ticker: z.string().min(1).max(8),
+  direction: alertDirectionSchema,
+  threshold: z.number(),
+  triggeredPrice: z.number(),
+  occurredUtc: z.string(),
+  isRead: z.boolean(),
+});
+
+/** The hub payload is the notification minus its read flag — a push is unread by definition. */
+export const notificationPushSchema = notificationSchema.omit({ isRead: true });
+
 export type WatchlistItem = z.infer<typeof watchlistItemSchema>;
 export type Watchlist = z.infer<typeof watchlistSchema>;
 export type Tick = z.infer<typeof tickSchema>;
 export type ProblemDetails = z.infer<typeof problemDetailsSchema>;
 export type Session = z.infer<typeof sessionSchema>;
+export type AlertDirection = z.infer<typeof alertDirectionSchema>;
+export type AlertRule = z.infer<typeof alertRuleSchema>;
+export type Notification = z.infer<typeof notificationSchema>;
+export type NotificationPush = z.infer<typeof notificationPushSchema>;

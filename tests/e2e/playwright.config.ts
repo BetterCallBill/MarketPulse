@@ -5,6 +5,8 @@ const APP_URL = 'http://localhost:4173';
 
 export default defineConfig({
   testDir: './specs',
+  globalSetup: './global-setup.ts',
+  globalTeardown: './global-teardown.ts',
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
@@ -27,6 +29,13 @@ export default defineConfig({
       timeout: 120_000,
       stdout: 'pipe',
       stderr: 'pipe',
+      // The per-IP "auth" fixed window (register/login/refresh, 10/min by default) is sized
+      // for a real client, not a suite that runs several journeys' worth of anonymous page
+      // loads back to back from one IP within the same window — every unauthenticated mount
+      // fires a spurious refresh attempt (401 on /me), which alone eats most of the budget
+      // before any spec calls register or login. Raised here, not in appsettings, so
+      // production and dev defaults are untouched and only the e2e process gets headroom.
+      env: { Auth__LoginRequestsPerMinute: '1000' },
     },
     {
       command: 'pnpm --filter @marketpulse/dashboard preview --port 4173 --strictPort',

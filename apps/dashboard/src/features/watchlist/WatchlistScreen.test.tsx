@@ -17,6 +17,7 @@ const server = setupServer(
       items: [{ ticker: 'IVV', addedUtc: '2026-07-31T00:00:00+00:00' }],
     }),
   ),
+  http.get('http://localhost:5100/api/v1/alerts', () => HttpResponse.json([])),
 );
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));

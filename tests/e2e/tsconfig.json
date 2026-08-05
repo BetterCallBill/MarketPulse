@@ -9,5 +9,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["specs", "playwright.config.ts"]
+  "include": ["specs", "playwright.config.ts", "global-setup.ts", "global-teardown.ts"]
 }

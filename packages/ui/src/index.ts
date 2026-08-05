@@ -1,4 +1,5 @@
 export { Alert, type AlertProps } from './components/Alert/Alert';
+export { Badge, type BadgeProps } from './components/Badge/Badge';
 export { Button, type ButtonProps } from './components/Button/Button';
 export { Panel, type PanelProps } from './components/Panel/Panel';
 export {

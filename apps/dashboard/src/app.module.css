@@ -27,6 +27,12 @@
   gap: var(--mp-space-3);
 }
 
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--mp-space-3);
+}
+
 .email {
   font-size: 0.8125rem;
   color: var(--mp-text-muted);

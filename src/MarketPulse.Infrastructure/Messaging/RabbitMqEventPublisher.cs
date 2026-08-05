@@ -19,6 +19,7 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
     private readonly RabbitMqOptions _options;
     private readonly ILogger<RabbitMqEventPublisher> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly CancellationTokenSource _shutdownCts = new();
     private IChannel? _channel;
     private volatile bool _disposed;
 
@@ -53,9 +54,10 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
         string? correlationId,
         CancellationToken ct)
     {
-        // Checked here so a publish that races shutdown fails as this object being gone,
-        // rather than as an ObjectDisposedException from a semaphore the caller has never
-        // heard of. RabbitMqTickSink already guards itself this way.
+        // First line of defence: a publish arriving after disposal fails as this object
+        // being gone. A publish already *inside* ChannelAsync when disposal starts is
+        // handled by DisposeAsync cancelling _shutdownCts and taking _gate before it
+        // disposes anything — the flag alone cannot close that window.
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         var channel = await ChannelAsync(ct);
@@ -84,7 +86,12 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
             return _channel;
         }
 
-        await _gate.WaitAsync(ct);
+        // Linked so disposal mid-acquisition cancels this attempt instead of leaving
+        // DisposeAsync waiting on the gate for as long as the broker stays silent.
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            ct, _shutdownCts.Token);
+
+        await _gate.WaitAsync(linked.Token);
 
         try
         {
@@ -114,8 +121,8 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
                 }
             }
 
-            var channel = await _createChannel(true, ct);
-            await RabbitMqTopology.DeclareAsync(channel, _options, ct);
+            var channel = await _createChannel(true, linked.Token);
+            await RabbitMqTopology.DeclareAsync(channel, _options, linked.Token);
 
             _channel = channel;
             return channel;
@@ -133,25 +140,39 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
             return;
         }
 
-        // Set before the gate is disposed so a concurrent PublishAsync sees "this publisher
-        // is gone" instead of tripping over a disposed semaphore.
+        // Set before anything else so a publish that has not yet reached the gate fails
+        // as "this publisher is gone" rather than anything stranger.
         _disposed = true;
 
-        if (_channel is not null)
-        {
-            try
-            {
-                await _channel.DisposeAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex, "Failed to dispose the publisher channel during shutdown.");
-            }
+        // Interrupt any in-flight channel acquisition — including one parked against a
+        // silent broker — so acquiring the gate below cannot block indefinitely.
+        await _shutdownCts.CancelAsync();
 
-            _channel = null;
+        await _gate.WaitAsync();
+
+        try
+        {
+            if (_channel is not null)
+            {
+                try
+                {
+                    await _channel.DisposeAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        ex, "Failed to dispose the publisher channel during shutdown.");
+                }
+
+                _channel = null;
+            }
+        }
+        finally
+        {
+            _gate.Release();
         }
 
         _gate.Dispose();
+        _shutdownCts.Dispose();
     }
 }

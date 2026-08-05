@@ -130,13 +130,21 @@ public abstract class RabbitMqConsumerService : BackgroundService
                     QueueName, autoAck: false, consumer, stoppingToken);
 
                 // A subscription that got this far resets the backoff, so an outage that
-                // lasted an hour does not leave the next one starting at the cap.
+                // lasted an hour does not leave the next one starting at the cap. The
+                // floor below (after the shutdown await) is what stops this reset from
+                // enabling a hot loop when channels die immediately after subscribing.
                 retryDelay = TimeSpan.Zero;
 
                 _logger.LogInformation(
                     "{Consumer} listening on {Queue}.", GetType().Name, QueueName);
 
                 await shutdown.Task.WaitAsync(stoppingToken);
+
+                // A floor of one delay, not another zero: a channel that dies
+                // immediately after every successful subscribe must not turn this loop
+                // hot. One first-retry delay is invisible during a real outage and
+                // removes the spin class entirely.
+                retryDelay = _firstRetryDelay;
 
                 _logger.LogWarning(
                     "{Consumer}'s channel on {Queue} shut down; resubscribing.",

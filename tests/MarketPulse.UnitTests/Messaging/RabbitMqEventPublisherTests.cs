@@ -116,4 +116,38 @@ public class RabbitMqEventPublisherTests
         // The second call must not reach the already-disposed semaphore.
         await channel.Received(1).DisposeAsync();
     }
+
+    [Fact]
+    public async Task Disposal_interrupts_an_in_flight_channel_acquisition_instead_of_racing_it()
+    {
+        // The race the _disposed flag alone cannot close: a publish that has passed the
+        // flag check and is holding the gate — parked in channel creation against a broker
+        // that is not answering — meets DisposeAsync tearing the semaphore down under it.
+        var channelRequested = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var publisher = new RabbitMqEventPublisher(
+            async (_, ct) =>
+            {
+                channelRequested.TrySetResult();
+
+                // Only cancellation ends this, exactly like a broker that never answers.
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                return Channel(open: true); // unreachable
+            },
+            Options,
+            NullLogger<RabbitMqEventPublisher>.Instance);
+
+        var publish = Publish(publisher);
+        await channelRequested.Task;
+
+        // Disposal must complete promptly — the in-flight acquisition is interrupted, not
+        // waited out and not raced.
+        await publisher.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+
+        // And the interrupted publish surfaces cancellation — never an
+        // ObjectDisposedException from a SemaphoreSlim the caller has never heard of.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => publish.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
 }

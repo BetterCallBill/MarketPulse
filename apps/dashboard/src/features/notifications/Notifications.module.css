@@ -1,0 +1,48 @@
+.bell {
+  position: relative;
+}
+
+.panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--mp-space-2));
+  width: min(24rem, 90vw);
+  max-height: 24rem;
+  overflow-y: auto;
+  z-index: 10;
+  padding: var(--mp-space-3);
+}
+
+.heading {
+  margin: 0 0 var(--mp-space-2);
+  font-size: 1rem;
+}
+
+.empty {
+  margin: 0;
+  color: var(--mp-text-muted);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--mp-space-2);
+  padding: var(--mp-space-2) 0;
+  border-top: 1px solid var(--mp-border-subtle);
+}
+
+.item[data-read='true'] {
+  color: var(--mp-text-muted);
+}
+
+.time {
+  color: var(--mp-text-muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
