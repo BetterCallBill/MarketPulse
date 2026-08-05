@@ -4,8 +4,8 @@ The README's delivery plan describes the finished product. This document describ
 repository actually is, what remains, and in what order it gets built. When the two disagree,
 this one is right.
 
-**Verified against commit `e229fc0` on `test`, 2026-08-04.** Every status below was checked
-against the source tree, not against documentation.
+**Verified against commit `2a7238d` on `feature/slice-5a-portfolio-backend`, 2026-08-05.**
+Every status below was checked against the source tree, not against documentation.
 
 ## How this document is used
 

@@ -66,8 +66,12 @@ replaying a fresh key returns the stored response and records exactly one transa
 same key with a different request body is rejected 422 `idempotency-key-reuse`; keys are
 scoped per user, so Alice's key never replays for Bob; a failed request stores nothing, so the
 same key is safe to retry after a 422 or 500; two concurrent requests racing one fresh key
-execute exactly once, with the loser reading the winner's stored response; and a request with
-no header at all executes normally every time, since the header is an offer, not a demand.
+execute exactly once — the loser gets either the winner's replayed response or a 409
+`idempotency-in-flight` to retry, and `Two_concurrent_requests_with_one_fresh_key_execute_exactly_once`
+asserts exactly that (one `Created`, the other `Created` or `Conflict`) rather than which one
+the loser lands on, since the recursive re-check usually beats the winner's handler to
+completion and 409 is the common case in practice; and a request with no header at all
+executes normally every time, since the header is an offer, not a demand.
 Retention and stale-claim reclaim are not built in this slice (ADR-004's consequences record
 why) and so are not tested — see "Deliberately not tested," below.
 
