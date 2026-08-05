@@ -174,4 +174,15 @@ describe('createApiClient', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`${BASE}/api/v1/notifications/n1/read`);
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).method).toBe('POST');
   });
+
+  // Navigation-safe: a page unload must not abort this specific POST — it's the one
+  // "must survive navigation" call, which is otherwise worked around in the e2e suite
+  // with waitForResponse.
+  it('marks a notification read with keepalive so a reload cannot abort it', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await createApiClient(BASE).markNotificationRead('n1');
+
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).keepalive).toBe(true);
+  });
 });

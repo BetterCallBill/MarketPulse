@@ -190,10 +190,13 @@ export function createApiClient(baseUrl: string) {
         z.array(notificationSchema).parse(d),
       ),
 
+    // keepalive: true is deliberate and scoped to this one call — it's the "must
+    // survive navigation" request (the user closing the tab right after acknowledging
+    // a notification shouldn't leave it unread), not a default every mutation needs.
     markNotificationRead: (id: string, signal?: AbortSignal): Promise<void> =>
       request(
         `/api/v1/notifications/${encodeURIComponent(id)}/read`,
-        { method: 'POST', signal },
+        { method: 'POST', signal, keepalive: true },
         () => undefined,
       ),
   };
