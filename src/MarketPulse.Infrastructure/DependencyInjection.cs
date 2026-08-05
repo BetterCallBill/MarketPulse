@@ -7,6 +7,7 @@ using MarketPulse.Infrastructure.RealTime;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -80,13 +81,19 @@ public static class InfrastructureServiceCollectionExtensions
         // ValidateOnStart, and the composition tests pin both sides.
         var source = configuration[$"{MarketDataOptions.SectionName}:Source"];
 
+        // TimeProvider.System unless a test already registered a fake — the poll timer
+        // needs one either way.
+        services.TryAddSingleton(TimeProvider.System);
+
         if (string.Equals(source, MarketDataOptions.YahooSource, StringComparison.OrdinalIgnoreCase))
         {
-            // Task 4 replaces this line with the real registration.
-            throw new NotSupportedException("MarketData:Source=Yahoo lands in a later task.");
+            services.AddHostedService<YahooPriceFeedService>();
+        }
+        else
+        {
+            services.AddHostedService<FakeTickService>();
         }
 
-        services.AddHostedService<FakeTickService>();
         return services;
     }
 
