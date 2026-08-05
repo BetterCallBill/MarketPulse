@@ -64,6 +64,19 @@ jobs:
           --health-timeout 5s
           --health-retries 12
           --health-start-period 30s
+      rabbitmq:
+        image: rabbitmq:3-management
+        env:
+          RABBITMQ_DEFAULT_USER: marketpulse
+          RABBITMQ_DEFAULT_PASS: "Local!Dev!Pass123"
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+          --health-start-period 20s
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
