@@ -1,3 +1,4 @@
+using MarketPulse.Api.Filters;
 using MarketPulse.Application.Portfolios;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -15,6 +16,7 @@ public sealed class PortfolioController(ISender sender) : ControllerBase
         Ok(await sender.Send(new GetPortfolioQuery(), ct));
 
     [HttpPost("transactions")]
+    [ServiceFilter(typeof(IdempotencyFilter))]
     public async Task<ActionResult<PortfolioDto>> Record(
         [FromBody] RecordTransactionCommand command, CancellationToken ct)
     {

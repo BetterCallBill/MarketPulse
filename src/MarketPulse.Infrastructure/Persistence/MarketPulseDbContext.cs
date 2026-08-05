@@ -15,6 +15,7 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Portfolio> Portfolios => Set<Portfolio>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
+    public DbSet<IdempotencyKey> IdempotencyKeys => Set<IdempotencyKey>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -215,6 +216,22 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
             e.HasIndex(x => new { x.PortfolioId, x.OccurredUtc });
 
             e.HasOne<Portfolio>().WithMany().HasForeignKey(x => x.PortfolioId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<IdempotencyKey>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.Endpoint).HasMaxLength(128).IsRequired();
+            e.Property(x => x.Key).HasMaxLength(128).IsRequired();
+            e.Property(x => x.RequestHash).HasMaxLength(64).IsRequired();
+
+            // The arbiter. Two racing requests with one fresh key: the second insert
+            // violates this and reads the winner's row instead.
+            e.HasIndex(x => new { x.UserId, x.Endpoint, x.Key }).IsUnique();
+
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

@@ -2,6 +2,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using MarketPulse.Api;
 using MarketPulse.Api.Authentication;
+using MarketPulse.Api.Filters;
 using MarketPulse.Api.Hubs;
 using MarketPulse.Api.Messaging;
 using MarketPulse.Api.Middleware;
@@ -147,6 +148,7 @@ builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddMessaging();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<IdempotencyFilter>();
 
 var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? ["http://localhost:5173"];
