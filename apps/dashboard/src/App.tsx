@@ -6,6 +6,8 @@ import { ProtectedRoute } from './features/auth/ProtectedRoute';
 import { RegisterScreen } from './features/auth/RegisterScreen';
 import { SignOutButton } from './features/auth/SignOutButton';
 import { NotificationBell } from './features/notifications/NotificationBell';
+import { Nav } from './features/nav/Nav';
+import { PortfolioScreen } from './features/portfolio/PortfolioScreen';
 import { WatchlistScreen } from './features/watchlist/WatchlistScreen';
 
 const queryClient = new QueryClient();
@@ -17,6 +19,7 @@ export function App() {
         <div className={styles.page}>
           <header className={styles.header}>
             <h1 className={styles.wordmark}>MarketPulse Pro</h1>
+            <Nav />
             <div className={styles.controls}>
               <NotificationBell />
               <SignOutButton />
@@ -31,6 +34,14 @@ export function App() {
                 element={
                   <ProtectedRoute>
                     <WatchlistScreen />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/portfolio"
+                element={
+                  <ProtectedRoute>
+                    <PortfolioScreen />
                   </ProtectedRoute>
                 }
               />

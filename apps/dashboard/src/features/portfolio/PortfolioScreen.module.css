@@ -1,0 +1,10 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-5);
+}
+
+.heading {
+  margin: 0;
+  font-size: 1.25rem;
+}
