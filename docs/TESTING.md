@@ -10,9 +10,9 @@ Trophy-shaped: heaviest at integration, thin but present at unit and end-to-end.
 | Application unit | xUnit + NSubstitute | Handler orchestration with a substituted repository, password policy, `TickBroadcaster`'s sink fan-out (including one sink throwing), `RabbitMqTickSink`'s non-blocking/single-flight reconnect behaviour and its disposal of the channel it replaces, `RabbitMqConsumerService`'s resubscribe-on-channel-shutdown loop (including that a subscribe failure never escapes `ExecuteAsync`), `RabbitMqEventPublisher`'s channel replacement and disposed-state guard, `AlertEvaluator`'s recovery from one rule losing a concurrency race, `OutboxDispatcher`'s publish-then-mark-dispatched ordering against a substituted `IEventPublisher` |
 | Architecture | xUnit + reflection | `Domain` references nothing outside the BCL; `MarketPulse.Application` references no messaging or web framework; `MarketPulse.Alerts` references no web framework; every CSRF-exempt hub declares no client-invokable methods |
 | Backend integration | WebApplicationFactory + Testcontainers | Real SQL Server **and RabbitMQ**, real migration, real HTTP; auth journeys, CSRF, rate limiting, cross-user isolation — now extended to alert rules, notifications, portfolios and transactions; the alerts pipeline end to end (rule creation → crossing tick → outbox row → dispatch → idempotent consumption → per-user SignalR delivery), redelivery producing no duplicate, a poison message reaching the dead-letter queue, an alert naming a non-existent user reaching it too rather than requeueing forever, and — through a loopback proxy that severs and restores the link to the broker — a recovering connection surviving and a consumer resubscribing after an outage; the chaos test (`ChaosTests.cs`, below); the portfolio flow over HTTP (`PortfolioApiTests.cs` — buy then partial sell producing correct average cost and realised P&L, empty portfolio 200, oversell 422, unknown ticker and bad side 400s, transaction paging newest-first) and its EF round trip (`PortfolioPersistenceTests.cs` — owned collections, `RowVersion`/`Version` tokens, decimal precision surviving); stored-key idempotency (`IdempotencyTests.cs`, below); and the portfolio concurrency anomaly pair (`PortfolioConcurrencyAnomalyTests`, below) |
-| Frontend unit | Vitest | Stream reducer, zod schemas, `useNow`/`usePriceStream`/`PriceCell` hooks (stale-clock, initial-connect-failure), `useNotificationStream` (parse, cache prepend, reconnect dispatch — both hooks now share `features/realtime/reconnectPolicy`), `AlertCell` and `NotificationBell` behaviour, api-client CSRF and single-flight refresh |
+| Frontend unit | Vitest | Stream reducer, zod schemas (including `portfolioSchema`/`transactionSchema` against 5a's wire shapes), `useNow`/`usePriceStream`/`PriceCell` hooks (stale-clock, initial-connect-failure), `useNotificationStream` (parse, cache prepend, reconnect dispatch — both hooks now share `features/realtime/reconnectPolicy`), `AlertCell` and `NotificationBell` behaviour, `HoldingsTable`'s render-time unrealised P&L derivation (positive and negative, the em-dash for a holding whose ticker hasn't ticked, the same em-dash on the footer total the moment any held ticker lacks a price), `TradeForm`'s idempotency-key lifecycle — a fresh `crypto.randomUUID()` per submission, the same key reused when Retry resubmits after a 409 *or* a network failure (no HTTP status — the other ambiguous outcome the key exists for), a new one minted on the next deliberate submission, the in-flight guard against a stray double-submit — the half of the 5a contract the server-side tests can't see, `TransactionHistory`'s load-more paging (newest-first, the button disappearing once a short page drains the history, rows and button staying mounted-and-disabled through an in-flight page fetch, an error state replacing the false "No trades recorded yet." empty state on a failed fetch), `usePortfolio`/`useTransactions`/`useRecordTransaction` (skip-page paging via `useInfiniteQuery`, each page's `take` fixed at `pageSize` and proven never to grow even after repeated load-more — the property a prior growing-window `take = pages × pageSize` shape broke against the server's `Take ≤ 100` cap — the mutation invalidating both `['portfolio']` and `['transactions']`), `Nav` (marks the active route, renders nothing without a session), api-client CSRF and single-flight refresh |
 | Frontend integration | Vitest + RTL + MSW | Watchlist screen render, 409-duplicate error path, login error paths, protected-route redirect |
-| End-to-end | Playwright + Chromium | Four journeys through the real API and the production dashboard build, one of them (`alerts.spec.ts`) against the full alerts pipeline including a real Alerts worker and RabbitMQ |
+| End-to-end | Playwright + Chromium | Five journeys through the real API and the production dashboard build, one of them (`alerts.spec.ts`) against the full alerts pipeline including a real Alerts worker and RabbitMQ, another (`portfolio.spec.ts`) a buy and a higher sell producing correct holdings, average cost, realised P&L, and newest-first history, surviving a reload |
 
 **TDD in practice.** `AlertRule.Evaluate` is the concrete example behind the "TDD used for
 the alert-evaluation engine" claim in the README's coverage map: its truth-table unit tests,
@@ -122,7 +122,7 @@ clause at all. Without `Version`, test (b) would not throw.
 
 ## End-to-end
 
-`tests/e2e` covers four journeys against a real API, a real SQL Server, and — since 4b —
+`tests/e2e` covers five journeys against a real API, a real SQL Server, and — since 4b —
 a real broker and a real Alerts worker:
 
 1. Register a new account, land on the protected watchlist, add a ticker, see its price
@@ -136,6 +136,14 @@ a real broker and a real Alerts worker:
    watch the rule flip to Triggered and the bell badge appear, open the panel and see the
    notification naming the ticker and price, and confirm the read state survives a full
    page reload because it lives on the server, not in the client.
+5. **(`portfolio.spec.ts`, added in 5b)** Register, navigate to `/portfolio` over the header
+   nav, buy 10 units of IVV at a user-typed $60, confirm the holdings row's units and average
+   cost in cell-scoped assertions (a row-wide substring match on `'6'` would be silently
+   satisfied by the `$60.00` average-cost cell even before a sell ever landed), sell 4 at
+   $70 and see average cost unchanged but realised P&L read `+$40.00`, confirm the live price
+   cell ticks within the watchlist journey's tolerant 15s window, see the two trades
+   newest-first in history, and confirm everything — holdings and history alike — survives a
+   full page reload because it is server truth, not client state.
 
 Running it:
 
@@ -155,7 +163,7 @@ reports liveness rather than readiness, Playwright concludes the server is up, a
 specs then fail on queries against a database that does not exist.
 
 `docker compose up -d` now brings up RabbitMQ alongside SQL Server — a prerequisite the
-alerts journey needs and the other three tolerate, since nothing in them touches the
+alerts journey needs and the other four tolerate, since nothing in them touches the
 broker. The Alerts worker itself exposes no HTTP port, so it cannot join Playwright's
 `webServer[]` the way the API and the built dashboard do; it is instead spawned from
 `global-setup.ts` (`dotnet run --project ../../src/MarketPulse.Alerts`, detached so
@@ -197,9 +205,17 @@ the backend and frontend jobs, and uploads a report artifact on failure.
   `IdempotencyKeys` rows live forever, and a claim orphaned by a hard crash between claim and
   completion has no reclaim path — so there is nothing to test against; both are named as a
   deferred operations concern in ADR-004's consequences.
-- **No unrealised P&L test.** It does not exist server-side by design (the server holds no
-  current price to compute it against — see ADR-004's context and the 5a spec's decision
-  table); 5b derives it client-side from the live price stream and will test it there.
+- **No server-side unrealised P&L test.** It does not exist server-side by design (the
+  server holds no current price to compute it against — see ADR-004's context and the 5a
+  spec's decision table); the derivation is client-side, and `HoldingsTable.test.tsx`
+  (frontend unit, above) is where it is tested instead.
+- **No concurrent-sell 409 exercised through the browser (5b).** `PortfolioConcurrencyAnomalyTests`
+  and the idempotency middleware facts above already own that path; `portfolio.spec.ts` stays
+  deterministic on user-typed prices instead of trying to race a real client against itself.
+- **No idempotency replay at the HTTP layer from the client (5b).** `IdempotencyTests.cs`
+  above owns that; the frontend suites assert the *key discipline* — the right key sent at
+  the right time — which is the half of the 5a contract the server-side tests cannot see.
+- **No load/perf test of history paging (5b).** A different exercise than this slice scoped.
 
 ## Shared-fixture determinism
 

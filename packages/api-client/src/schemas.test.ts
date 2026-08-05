@@ -3,7 +3,9 @@ import {
   alertRuleSchema,
   notificationPushSchema,
   notificationSchema,
+  portfolioSchema,
   tickSchema,
+  transactionSchema,
   watchlistSchema,
 } from './schemas';
 
@@ -100,5 +102,35 @@ describe('notification schemas', () => {
     });
 
     expect(p.ticker).toBe('IVV');
+  });
+});
+
+describe('portfolio schemas', () => {
+  it('parses a portfolio as the API serialises it', () => {
+    const p = portfolioSchema.parse({
+      holdings: [
+        { ticker: 'IVV', units: 10.5, averageCost: 60.25, realisedPnL: 100 },
+      ],
+      totalRealisedPnL: 100,
+    });
+
+    expect(p.holdings[0]?.ticker).toBe('IVV');
+    expect(p.totalRealisedPnL).toBe(100);
+  });
+
+  it('parses a transaction and rejects a bad side', () => {
+    const t = transactionSchema.parse({
+      id: 't1',
+      ticker: 'IVV',
+      side: 'Buy',
+      units: 10,
+      price: 60,
+      occurredUtc: '2026-08-05T00:00:00+00:00',
+      recordedUtc: '2026-08-05T00:00:00+00:00',
+    });
+
+    expect(t.side).toBe('Buy');
+
+    expect(() => transactionSchema.parse({ ...t, side: 'Hold' })).toThrow();
   });
 });

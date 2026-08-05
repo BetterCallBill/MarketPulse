@@ -88,3 +88,29 @@ store existed to fall back on.
 default.** The candidates named above are the test: if a feature's state is a server row with
 a lag, it belongs in TanStack Query and a mutation; only state with no server row to be a lag
 *of* is a genuine candidate for something else.
+
+## Addendum: 2026-08-05 — slice 5b, unrealised P&L
+
+Slice 5b is the third worked example, and the one this ADR's "trigger to revisit" section
+named by name: the portfolio dashboard's per-holding unrealised P&L. It is computed
+`units × (livePrice − averageCost)` in `HoldingsTable`, from two sources already in the
+cache — the `['portfolio']` query (server truth: units, average cost, realised P&L) and
+`usePriceStream`'s public broadcast (the same stream the watchlist already reads, no new
+subscription) — joined **at render**, on every render, and stored nowhere. A holding whose
+ticker has not ticked yet renders an em-dash rather than a zero, because zero would claim
+knowledge of a value that does not exist; the footer total follows the identical rule and
+turns into an em-dash the moment any held ticker lacks a price, because a partial sum over
+unknown terms is not a number, it's a lie with decimal places.
+
+This is the same shape as the unread-badge example above, not a new one: a value cheap to
+recompute every render, derived from state that already lives in the query cache and a
+stream, with no mutation, no reconnect handler, and no component that needs it to persist
+past its own render. It was also the concrete candidate this ADR asked to be tested against
+before Zustand earned a place — "a live price joined against a server row" is exactly the
+shape of question this document already answers, and it answers it the same way: no second
+state layer. Trade-form submission state (the pending idempotency key) is `useRef`, not a
+store, for the same reason the notification panel's open/closed flag is `useState` — it is
+scoped to one component's one interaction, gone the moment that interaction resolves, and
+never read by anything else.
+
+No client-side state library is a dependency of this codebase, still.

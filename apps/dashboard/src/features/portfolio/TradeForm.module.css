@@ -1,0 +1,53 @@
+.heading {
+  margin: 0 0 var(--mp-space-2);
+  font-size: 1rem;
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mp-space-2);
+}
+
+/* TextField supplies its own input styling; this wrapper only pins the compact width the
+   inline form layout needs (TextField's own field div is a flex column, so its input
+   stretches to fill whatever width this wrapper gives it). */
+.textField {
+  width: 7rem;
+}
+
+.selectField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-1);
+  width: 7rem;
+}
+
+/* Matches TextField's own label treatment (packages/ui) so Side reads consistently with
+   Ticker/Units/Price even though there's no Select primitive to source it from. */
+.selectLabel {
+  font-size: 0.875rem;
+  color: var(--mp-text-secondary);
+}
+
+.select {
+  padding: var(--mp-space-2) var(--mp-space-3);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-sm);
+  background: var(--mp-surface-base);
+  color: var(--mp-text-primary);
+  font: inherit;
+  width: 100%;
+}
+
+.select:hover {
+  border-color: var(--mp-text-muted);
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--mp-space-2);
+  margin-top: var(--mp-space-2);
+}

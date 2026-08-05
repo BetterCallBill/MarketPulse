@@ -4,8 +4,10 @@ The README's delivery plan describes the finished product. This document describ
 repository actually is, what remains, and in what order it gets built. When the two disagree,
 this one is right.
 
-**Verified against commit `2a7238d` on `feature/slice-5a-portfolio-backend`, 2026-08-05.**
-Every status below was checked against the source tree, not against documentation.
+**Verified against commit `deaa18a` on `feature/slice-5b-portfolio-dashboard`, 2026-08-05**
+(the branch's code head immediately before this docs commit — a commit cannot cite its own
+hash before it exists). Every status below was checked against the source tree, not against
+documentation.
 
 ## How this document is used
 
@@ -34,11 +36,11 @@ Every status below was checked against the source tree, not against documentatio
 | 1 · Backend foundation | **Done** | Clean Architecture layering (enforced by `DependencyRuleTests`), EF Core + 6 migrations, cookie auth with refresh-token rotation, CSRF, auth rate limiting, watchlist CRUD, `Portfolio` aggregate (holdings, average-cost basis, realised P&L), buy/sell transactions, the idempotency-key store | — |
 | 2 · Real-time core | **Partial** | SignalR hub + fan-out, `PriceTickChannel`, tick delivery to the dashboard | Real market-data feed (ticks come from `FakeTickService`, a random walk), tick persistence, Dapper history queries |
 | 3 · Messaging & alerts | **Done** | RabbitMQ, the outbox, the Alerts worker, alert rules, notifications, per-user delivery, and the chaos test proving zero lost alerts across a broker kill/restart | — |
-| 4 · Frontend core | **Partial** | `packages/ui` token system + primitives, `packages/api-client` (zod-validated, no direct `fetch` anywhere in the app), TanStack Query for server state, auth screens, watchlist table with live price cells, alerts and notifications UI (inline rule control, notifications panel) | ADR-007 written: server cache only |
+| 4 · Frontend core | **Done** | `packages/ui` token system + primitives, `packages/api-client` (zod-validated, no direct `fetch` anywhere in the app), TanStack Query for server state, auth screens, watchlist table with live price cells, alerts and notifications UI (inline rule control, notifications panel), header navigation (`Watchlist \| Portfolio`), portfolio dashboard (holdings table with render-derived live unrealised P&L, trade form with submission-scoped idempotency keys, transaction history with load-more) | — |
 | 5 · Cloud & pipeline | **Not started** | CI runs backend tests, frontend tests, and Playwright E2E against a real database | Terraform, ECS, CloudFront/S3, Lambda snapshot, OpenTelemetry, deployment pipeline |
 | 6 · Hardening | **Not started** | Testcontainers integration suite, one E2E journey (authentication) | CSP, threat model, performance pass, RUM, load test, the documentation set |
 
-Two phases untouched, two partly built, two done.
+Two phases untouched, one partly built, three done.
 
 Phase 4's remainder had no slice of its own: the alerts and notifications UI landed in 4b, and
 took the client-state question with it. 4b's unread-notification handling was the trigger the
@@ -48,6 +50,11 @@ allowed for — unread state turned out to be server state already exposed by th
 nothing needed a second store. Zustand was not added merely to satisfy ADR-007; the ADR was
 rewritten instead, to describe what the application actually does — see
 [ADR-007](adr/007-state-architecture.md).
+
+Phase 4's other remainder — the dashboard surface for the portfolio 5a's backend built — did
+get its own slice: 5b, which lands the `/portfolio` route, the live unrealised P&L derivation
+(ADR-007's third worked example), and the trade form's idempotency-key discipline, closing the
+phase.
 
 ---
 
@@ -61,6 +68,7 @@ rewritten instead, to describe what the application actually does — see
 | 4a · Alerts pipeline — backend | 2026-08-04 | RabbitMQ topology, transactional outbox, the `MarketPulse.Alerts` worker, alert rule CRUD, per-user notification delivery over `NotificationHub`, ADR-009. Proven end to end by integration tests against real SQL Server and real RabbitMQ. No dashboard changes |
 | 4b · Alerts UI and chaos test | 2026-08-05 | `features/alerts` (inline rule control on watchlist rows) and `features/notifications` (bell badge, dropdown panel, mark-read-on-open) on `packages/ui`; `useNotificationStream` patching SignalR pushes into the TanStack Query cache; ADR-007 (client state is the server cache — Zustand rejected); the `alerts.spec.ts` Playwright journey with the Alerts worker spawned from global-setup; `ChaosTests.cs`, the chaos test that stops RabbitMQ between a rule triggering and its outbox row dispatching and proves exactly one notification survives the restart. Two of 4a's carried-over review findings fixed along the way |
 | 5a · Portfolio backend | 2026-08-05 | `Portfolio` aggregate (implicit per-user creation, `Holding`s, average-cost basis, realised P&L) behind MediatR commands/queries over one store (ADR-004); `Portfolio.Version`, a monotonic counter that keeps the aggregate's `RowVersion` guarding every trade even though a buy/sell only touches a `Holding` row; stored-key idempotency (`IdempotencyFilter`) on `POST /portfolio/transactions` and `POST /alerts`, settling the debt 4a deferred; `PortfolioConcurrencyAnomalyTests`, the oversell lost-update anomaly reproduced with the concurrency token bypassed and prevented with it. Backend-only, on the 4a/4b precedent — no dashboard changes |
+| 5b · Portfolio dashboard | 2026-08-05 | `/portfolio` route and header navigation (`Watchlist \| Portfolio`, session-gated); `HoldingsTable` with unrealised P&L derived at render from the `['portfolio']` cache × the price stream (ADR-007's third worked example), em-dash for an unticked holding and for the footer total when any held ticker lacks a price; `TradeForm` with submission-scoped idempotency keys (`crypto.randomUUID()` minted per submission, reused by Retry after a 409, fresh on the next submission), no optimistic updates; `TransactionHistory`'s growing take-window load-more; the `portfolio.spec.ts` Playwright journey (buy, sell, P&L, history, reload); Vitest coverage of the key lifecycle 5a's server-side tests couldn't see. Closes phase 4 |
 
 #### 4a review findings: resolved and outstanding
 
@@ -101,17 +109,8 @@ restart.
 
 ## Remaining slices
 
-Nine slices remain. Sizing assumes the ~8-task shape of slices 1–3; slices marked **may split**
+Eight slices remain. Sizing assumes the ~8-task shape of slices 1–3; slices marked **may split**
 are the ones most likely to exceed it.
-
-### 5b · Portfolio dashboard · phase 1
-The frontend half of the gap 5a's backend closed: a holdings table on the dashboard with
-live unrealised P&L derived client-side from the price stream (the ADR-007 pattern — no
-server-side price state to compute it against), the buy/sell form sending `Idempotency-Key`
-headers against the endpoint 5a built, transaction history, and the Playwright journey
-through it.
-
-*Depends on:* 5a (done) — an API that already works.
 
 ### 6 · Real market-data ingestion · phase 2
 Replace `FakeTickService` with a real feed behind Polly retry and circuit breaker, keeping

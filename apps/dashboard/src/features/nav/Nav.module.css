@@ -1,0 +1,25 @@
+.link {
+  padding: var(--mp-space-1) var(--mp-space-2);
+  border-radius: var(--mp-radius-sm);
+  color: var(--mp-text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.link:hover {
+  color: var(--mp-text-primary);
+  background: var(--mp-surface-hover);
+}
+
+.link[aria-current='page'] {
+  color: var(--mp-text-primary);
+  font-weight: 600;
+}
+
+/* Bare element selector unscoped in css-modules (element/attribute selectors aren't localised).
+   This is a deliberate trade-off — there is exactly one such nav, so no risk of silent inheritance
+   by a future second nav. If adding another primary nav, consider moving this to a .nav class. */
+nav[aria-label='Primary'] {
+  display: flex;
+  gap: var(--mp-space-2);
+}

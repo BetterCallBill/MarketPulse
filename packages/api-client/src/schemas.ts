@@ -55,6 +55,30 @@ export const notificationSchema = z.object({
 /** The hub payload is the notification minus its read flag — a push is unread by definition. */
 export const notificationPushSchema = notificationSchema.omit({ isRead: true });
 
+export const tradeSideSchema = z.enum(['Buy', 'Sell']);
+
+export const holdingSchema = z.object({
+  ticker: z.string().min(1).max(8),
+  units: z.number(),
+  averageCost: z.number(),
+  realisedPnL: z.number(),
+});
+
+export const portfolioSchema = z.object({
+  holdings: z.array(holdingSchema),
+  totalRealisedPnL: z.number(),
+});
+
+export const transactionSchema = z.object({
+  id: z.string(),
+  ticker: z.string().min(1).max(8),
+  side: tradeSideSchema,
+  units: z.number().positive(),
+  price: z.number().positive(),
+  occurredUtc: z.string(),
+  recordedUtc: z.string(),
+});
+
 export type WatchlistItem = z.infer<typeof watchlistItemSchema>;
 export type Watchlist = z.infer<typeof watchlistSchema>;
 export type Tick = z.infer<typeof tickSchema>;
@@ -64,3 +88,7 @@ export type AlertDirection = z.infer<typeof alertDirectionSchema>;
 export type AlertRule = z.infer<typeof alertRuleSchema>;
 export type Notification = z.infer<typeof notificationSchema>;
 export type NotificationPush = z.infer<typeof notificationPushSchema>;
+export type TradeSide = z.infer<typeof tradeSideSchema>;
+export type Holding = z.infer<typeof holdingSchema>;
+export type Portfolio = z.infer<typeof portfolioSchema>;
+export type Transaction = z.infer<typeof transactionSchema>;
