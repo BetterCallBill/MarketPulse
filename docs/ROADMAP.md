@@ -4,7 +4,7 @@ The README's delivery plan describes the finished product. This document describ
 repository actually is, what remains, and in what order it gets built. When the two disagree,
 this one is right.
 
-**Verified against commit `65914bc` on `feature/slice-6-market-data-ingestion`, 2026-08-05**
+**Verified against commit `009d10c` on `feature/slice-7a-price-history`, 2026-08-06**
 (the branch's code head immediately before this docs commit — a commit cannot cite its own
 hash before it exists). Every status below was checked against the source tree, not against
 documentation.
@@ -34,7 +34,7 @@ documentation.
 | Phase | Status | Present | Absent |
 |---|---|---|---|
 | 1 · Backend foundation | **Done** | Clean Architecture layering (enforced by `DependencyRuleTests`), EF Core + 6 migrations, cookie auth with refresh-token rotation, CSRF, auth rate limiting, watchlist CRUD, `Portfolio` aggregate (holdings, average-cost basis, realised P&L), buy/sell transactions, the idempotency-key store | — |
-| 2 · Real-time core | **Partial** | SignalR hub + fan-out, `PriceTickChannel`, tick delivery to the dashboard, the real Yahoo Finance market-data feed behind a retry/breaker/timeout resilience pipeline (`MarketData:Source=Yahoo`, [ADR-010](adr/010-market-data-feed.md)) — `FakeTickService`'s random walk stays the default for tests and offline development, with no fallback to it if the real feed fails | Tick persistence, Dapper history queries |
+| 2 · Real-time core | **Partial** | SignalR hub + fan-out, `PriceTickChannel`, tick delivery to the dashboard, the real Yahoo Finance market-data feed behind a retry/breaker/timeout resilience pipeline (`MarketData:Source=Yahoo`, [ADR-010](adr/010-market-data-feed.md)), tick persistence (`PersistingTickSink`/`TickBuffer`/`TickPersistenceService`, batched set-based INSERT into `PriceTicks`), chunked 7-day retention sweep, Dapper history reads (OHLC candles, set-based sparklines) behind `GET /api/v1/prices/{ticker}/candles` and `GET /api/v1/prices/sparklines` — `FakeTickService`'s random walk stays the default for tests and offline development, with no fallback to it if the real feed fails | Dashboard chart UI (7b) |
 | 3 · Messaging & alerts | **Done** | RabbitMQ, the outbox, the Alerts worker, alert rules, notifications, per-user delivery, and the chaos test proving zero lost alerts across a broker kill/restart | — |
 | 4 · Frontend core | **Done** | `packages/ui` token system + primitives, `packages/api-client` (zod-validated, no direct `fetch` anywhere in the app), TanStack Query for server state, auth screens, watchlist table with live price cells, alerts and notifications UI (inline rule control, notifications panel), header navigation (`Watchlist \| Portfolio`), portfolio dashboard (holdings table with render-derived live unrealised P&L, trade form with submission-scoped idempotency keys, transaction history with load-more) | — |
 | 5 · Cloud & pipeline | **Not started** | CI runs backend tests, frontend tests, and Playwright E2E against a real database | Terraform, ECS, CloudFront/S3, Lambda snapshot, OpenTelemetry, deployment pipeline |
@@ -70,6 +70,7 @@ phase.
 | 5a · Portfolio backend | 2026-08-05 | `Portfolio` aggregate (implicit per-user creation, `Holding`s, average-cost basis, realised P&L) behind MediatR commands/queries over one store (ADR-004); `Portfolio.Version`, a monotonic counter that keeps the aggregate's `RowVersion` guarding every trade even though a buy/sell only touches a `Holding` row; stored-key idempotency (`IdempotencyFilter`) on `POST /portfolio/transactions` and `POST /alerts`, settling the debt 4a deferred; `PortfolioConcurrencyAnomalyTests`, the oversell lost-update anomaly reproduced with the concurrency token bypassed and prevented with it. Backend-only, on the 4a/4b precedent — no dashboard changes |
 | 5b · Portfolio dashboard | 2026-08-05 | `/portfolio` route and header navigation (`Watchlist \| Portfolio`, session-gated); `HoldingsTable` with unrealised P&L derived at render from the `['portfolio']` cache × the price stream (ADR-007's third worked example), em-dash for an unticked holding and for the footer total when any held ticker lacks a price; `TradeForm` with submission-scoped idempotency keys (`crypto.randomUUID()` minted per submission, reused by Retry after a 409, fresh on the next submission), no optimistic updates; `TransactionHistory`'s growing take-window load-more; the `portfolio.spec.ts` Playwright journey (buy, sell, P&L, history, reload); Vitest coverage of the key lifecycle 5a's server-side tests couldn't see. Closes phase 4 |
 | 6 · Real market-data ingestion | 2026-08-05 | `YahooPriceFeedService` (`BackgroundService`, per-symbol concurrent polls of the keyless `v8/finance/chart/{symbol}` endpoint every 60s (25 req/min against the 25-symbol seed set), ASX↔`.AX` symbol mapping, observation-time timestamps) writing into the same `PriceTickChannel` the fake fills; `MarketDataResilience`'s declared retry (3×, exponential backoff with jitter) → circuit breaker (`FailureRatio` 0.9, `MinimumThroughput` 6, 90s sampling, 2min break) → per-attempt timeout pipeline on the typed `YahooQuoteClient`, proven against a `FakeTimeProvider`; `MarketData:Source=Fake\|Yahoo` composition switch (`Fake` default, bad value fails startup via `ValidateOnStart`); ADR-010 (feed selection, the tolerated-failure-modes table, the no-fallback product decision). Per-symbol bad quotes are skipped with one warning, siblings unaffected; a failed poll writes nothing and the next self-heals; no fallback to the fake. Task 6's manual rehearsal against the live upstream ran 2026-08-05/06: real prices confirmed (independent curl and the service's own successful polls agreed, e.g. IVV.AX 73.33 vs the 62.10 seed) and the dead-endpoint failure path confirmed (`Market-data circuit opened for 00:02:00 after sustained failures.`, health stayed 200 throughout) — see task-6-report.md. The live alert-fire leg was attempted but not captured: this sandbox's egress IP hit sustained Yahoo rate-limiting (429) partway through the session, which the breaker itself correctly suppressed, leaving no further real ticks to trigger a rule before the session's time budget ran out |
+| 7a · Price history backend | 2026-08-06 | Every real/fake tick now persists: `PersistingTickSink` fans into a bounded `TickBuffer`, `TickPersistenceService` flushes it on a timer as one set-based, chunked INSERT per batch into `PriceTicks` (clustered natural key `(Ticker, TimestampUtc)`, `IGNORE_DUP_KEY` absorbing duplicate observations rather than erroring), scoped per flush so no long-lived `DbContext` sits across the buffer's lifetime; `TickRetentionService` sweeps rows older than `History:RetentionDays` (default 7) in bounded chunks so a single delete never locks the table for the whole window; a Dapper read path (`IPriceHistoryReader`, bypassing EF Core for read-side aggregation) serving OHLC candle queries and a set-based sparklines query behind `GET /api/v1/prices/{ticker}/candles` and `GET /api/v1/prices/sparklines`, both with a slugged error contract (404 unknown-ticker, 400 invalid-interval/invalid-range/range-too-large) and a cross-user isolation test. Task 10 shipped a deliberate per-ticker N+1 in the sparklines handler — correct, fully covered by response-shape tests, and structurally invisible to them; Task 11 pinned it with a connection-counting test (`Expected: 1, Actual: 3`), replaced it with one set-based query, and measured both versions rather than asserting the fix mattered: [ADR-006](adr/006-n-plus-one-postmortem.md) and `docs/sql/` record the honest result — server-side query cost is a wash (112 vs. 114 logical reads, `PriceTicks` scanned 20 times either way), the real and structural win is round-trip count (20 connections collapsed to 1), measured end-to-end at 32.9ms → 22.5ms average (~32% faster) for a 20-ticker watchlist against an identical 404,625-row table. Backend-only, on the 5a/6 precedent — no dashboard changes; the chart UI is 7b |
 
 #### 4a review findings: resolved and outstanding
 
@@ -113,11 +114,14 @@ restart.
 Seven slices remain. Sizing assumes the ~8-task shape of slices 1–3; slices marked **may
 split** are the ones most likely to exceed it.
 
-### 7 · Price history and charts · phase 2 · may split
-Tick persistence, Dapper history queries, candle aggregation, dashboard chart. Carries the
-deliberate N+1 postmortem (ADR-006) and the SQL execution-plan analysis in `docs/sql/`.
+### 7b · Price history charts · phase 2
+Dashboard chart surface over the candle/sparkline endpoints 7a shipped: a chart component
+(`packages/ui` or feature-local, whichever the design work settles on), a `/prices/{ticker}`
+or in-place watchlist-row chart, `packages/api-client` types for `CandleDto`/`SparklineDto`,
+and the interval/range picker driving `GET /api/v1/prices/{ticker}/candles`. No backend work
+expected — 7a's read path and error contract are the full surface this slice consumes.
 
-*Depends on:* 6 for data worth charting.
+*Depends on:* 7a (done) for data and endpoints worth charting.
 
 ### 8 · Observability · phase 5
 OpenTelemetry traces and metrics, Serilog structured logging built out from the existing
@@ -153,9 +157,9 @@ BenchmarkDotNet suite, documented load test to the p95 < 200ms criterion, index 
 *Depends on:* 10 for a realistic environment to measure.
 
 ### 13 · Documentation backfill · phase 6
-The missing ADRs (004 CQRS scope, 005 captive-dependency postmortem, 006 N+1 postmortem —
-007 state architecture was written early, in 4b), `docs/api-style-guide.md`, and the six
-engineering write-ups.
+The missing ADRs (004 CQRS scope, 005 captive-dependency postmortem — 006 N+1 postmortem and
+007 state architecture were written early, in 7a and 4b respectively), `docs/api-style-guide.md`,
+and the six engineering write-ups.
 
 *Depends on:* the slices whose decisions they record. Some ADRs should be written earlier,
 alongside the work — see the register below.
@@ -182,17 +186,21 @@ The README currently describes these as existing. They do not. Each needs buildi
 |---|---|---|
 | `docs/adr/004-cqrs-scope.md` | README architecture | **Resolved in 5a** — see [ADR-004](adr/004-cqrs-scope.md): MediatR commands/queries over one store, the fuller read-store and event-sourced alternatives named and rejected. The README's claim is corrected to match |
 | `docs/adr/005-captive-dependency-postmortem.md` | README | Slice 13 — requires the engineered incident to have happened |
-| `docs/adr/006-n-plus-one-postmortem.md` | README | Slice 7, where the N+1 is deliberately introduced and fixed |
+| `docs/adr/006-n-plus-one-postmortem.md` | README architecture | **Resolved in 7a** — see [ADR-006](adr/006-n-plus-one-postmortem.md): sparklines' deliberate per-ticker N+1, pinned with a connection-counting test, replaced with one set-based query, measured before and after. The README's claim is corrected to match |
 | `docs/adr/007-state-architecture.md` | README architecture | **Resolved in 4b** — see [ADR-007](adr/007-state-architecture.md): client state is the server cache, Zustand rejected. The README's claim is corrected to match |
 | `docs/PERFORMANCE.md` | README docs index | Slice 12 |
 | `docs/THREAT-MODEL.md` | README docs index | Slice 11 |
 | `docs/api-style-guide.md` | README docs index | Slice 13 |
 | `docs/cost-model.md` | README docs index | Slice 9 |
-| `docs/sql/` | README docs index | Slice 7 |
 | `docs/benchmarks/` | README docs index | Slice 12 |
 | `apps/alerts-mfe` | README frontend structure | **Unscheduled** — see open question 2 |
 | `packages/emitter` | README frontend structure | **Unscheduled** — no phase covers it; likely delete the claim |
 | Storybook | README frontend structure | Already annotated "not yet" in the README; no phase covers it |
 
-Nine of these are dead links in the README today. Until each is resolved, the README should
+Seven of these are dead links in the README today. Until each is resolved, the README should
 mark them as planned rather than present them as description.
+
+(`docs/sql/`, present since 7a, left the table entirely rather than gaining a "Resolved in
+7a" row: an ADR is a single named decision worth a permanent cross-reference back to the slice
+that wrote it, but `docs/sql/` is just a directory — once it exists, there is nothing left to
+resolve or point back to.)

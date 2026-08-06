@@ -44,6 +44,11 @@ builder.Services.AddOptions<MarketDataOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder.Services.AddOptions<HistoryOptions>()
+    .Bind(builder.Configuration.GetSection(HistoryOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? throw new InvalidOperationException("The Jwt configuration section is missing.");
 

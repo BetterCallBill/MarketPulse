@@ -1,6 +1,7 @@
 using MarketPulse.Application.Abstractions;
 using MarketPulse.Application.Configuration;
 using MarketPulse.Infrastructure.Authentication;
+using MarketPulse.Infrastructure.History;
 using MarketPulse.Infrastructure.Messaging;
 using MarketPulse.Infrastructure.Persistence;
 using MarketPulse.Infrastructure.RealTime;
@@ -50,6 +51,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddDbContextFactory<MarketPulseDbContext>(o => o.UseSqlServer(connectionString));
         services.AddDbContext<MarketPulseDbContext>(
             o => o.UseSqlServer(connectionString), optionsLifetime: ServiceLifetime.Singleton);
+        services.AddSingleton<ISqlConnectionFactory>(new SqlConnectionFactory(connectionString));
+        services.AddScoped<IPriceHistoryReader, DapperPriceHistoryReader>();
         services.AddScoped<IWatchlistRepository, WatchlistRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
@@ -70,6 +73,14 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IPasswordHasher, PasswordHasherAdapter>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<PriceTickChannel>();
+
+        // Price history write path: the sink only enqueues; the hosted service drains and
+        // batch-inserts on its own clock (spec 2026-08-06, decision 2).
+        services.AddSingleton<TickBuffer>();
+        services.AddSingleton<ITickSink, PersistingTickSink>();
+        services.AddScoped<IPriceTickBatchWriter, SqlPriceTickBatchWriter>();
+        services.AddHostedService<TickPersistenceService>();
+        services.AddHostedService<TickRetentionService>();
 
         // Typed client + resilience pipeline for the real tick producer. Registering this
         // is inert on its own — nothing resolves YahooQuoteClient until Task 4 adds the

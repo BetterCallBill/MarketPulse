@@ -1,4 +1,5 @@
 using MarketPulse.Domain.Entities;
+using MarketPulse.Infrastructure.History;
 using Microsoft.EntityFrameworkCore;
 
 namespace MarketPulse.Infrastructure.Persistence;
@@ -16,6 +17,7 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
     public DbSet<Portfolio> Portfolios => Set<Portfolio>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<IdempotencyKey> IdempotencyKeys => Set<IdempotencyKey>();
+    public DbSet<PriceTickRow> PriceTicks => Set<PriceTickRow>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -233,6 +235,17 @@ public sealed class MarketPulseDbContext(DbContextOptions<MarketPulseDbContext> 
 
             e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<PriceTickRow>(e =>
+        {
+            e.ToTable("PriceTicks");
+            // Clustered composite PK: every read is "one ticker, a time range", so range scans
+            // arrive pre-sorted with no secondary index to maintain. IGNORE_DUP_KEY is added by
+            // raw SQL in the migration — EF cannot express it.
+            e.HasKey(x => new { x.Ticker, x.TimestampUtc }).IsClustered();
+            e.Property(x => x.Ticker).HasMaxLength(8);
+            e.Property(x => x.Price).HasColumnType("decimal(18,4)");
         });
     }
 }
