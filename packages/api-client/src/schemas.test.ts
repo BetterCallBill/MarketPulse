@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   alertRuleSchema,
+  candlesSchema,
   notificationPushSchema,
   notificationSchema,
   portfolioSchema,
+  sparklinesSchema,
   tickSchema,
   transactionSchema,
   watchlistSchema,
@@ -132,5 +134,44 @@ describe('portfolio schemas', () => {
     expect(t.side).toBe('Buy');
 
     expect(() => transactionSchema.parse({ ...t, side: 'Hold' })).toThrow();
+  });
+});
+
+describe('candlesSchema', () => {
+  it('parses a valid candles payload', () => {
+    const parsed = candlesSchema.parse({
+      ticker: 'IVV',
+      interval: '1m',
+      candles: [{ t: '2026-08-06T10:00:00+00:00', o: 10, h: 12, l: 9, c: 11 }],
+    });
+    expect(parsed.candles[0]?.c).toBe(11);
+  });
+
+  it('rejects an unknown interval', () => {
+    expect(() =>
+      candlesSchema.parse({ ticker: 'IVV', interval: '42s', candles: [] }),
+    ).toThrow();
+  });
+
+  it('rejects a candle with a non-numeric price', () => {
+    expect(() =>
+      candlesSchema.parse({
+        ticker: 'IVV',
+        interval: '1m',
+        candles: [{ t: '2026-08-06T10:00:00+00:00', o: 'ten', h: 12, l: 9, c: 11 }],
+      }),
+    ).toThrow();
+  });
+});
+
+describe('sparklinesSchema', () => {
+  it('parses a ticker-to-closes record, including empty arrays', () => {
+    const parsed = sparklinesSchema.parse({ sparklines: { IVV: [1.5, 2.5], NDQ: [] } });
+    expect(parsed.sparklines['IVV']).toEqual([1.5, 2.5]);
+    expect(parsed.sparklines['NDQ']).toEqual([]);
+  });
+
+  it('rejects non-numeric closes', () => {
+    expect(() => sparklinesSchema.parse({ sparklines: { IVV: ['high'] } })).toThrow();
   });
 });

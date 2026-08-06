@@ -1,17 +1,22 @@
 import { z } from 'zod';
 import {
   alertRuleSchema,
+  candlesSchema,
   notificationSchema,
   portfolioSchema,
   problemDetailsSchema,
   sessionSchema,
+  sparklinesSchema,
   transactionSchema,
   watchlistSchema,
   type AlertDirection,
   type AlertRule,
+  type CandleInterval,
+  type Candles,
   type Notification,
   type Portfolio,
   type Session,
+  type Sparklines,
   type Transaction,
   type TradeSide,
   type Watchlist,
@@ -231,6 +236,24 @@ export function createApiClient(baseUrl: string) {
           signal,
         },
         (d) => portfolioSchema.parse(d),
+      ),
+
+    getCandles: (
+      ticker: string,
+      interval: CandleInterval,
+      from: string,
+      to: string,
+      signal?: AbortSignal,
+    ): Promise<Candles> =>
+      request(
+        `/api/v1/prices/${encodeURIComponent(ticker)}/candles?interval=${interval}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        { method: 'GET', signal },
+        (d) => candlesSchema.parse(d),
+      ),
+
+    getSparklines: (signal?: AbortSignal): Promise<Sparklines> =>
+      request('/api/v1/prices/sparklines', { method: 'GET', signal }, (d) =>
+        sparklinesSchema.parse(d),
       ),
   };
 }
