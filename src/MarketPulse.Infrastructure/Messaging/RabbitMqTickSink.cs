@@ -89,20 +89,24 @@ public sealed class RabbitMqTickSink : ITickSink, IAsyncDisposable
         var body = JsonSerializer.SerializeToUtf8Bytes(
             new PriceTickMessage(tick.Ticker, tick.Price, tick.TimestampUtc));
 
+        var properties = new BasicProperties
+        {
+            Persistent = false,
+
+            // A tick has no originating HTTP request to inherit a correlation id from,
+            // so it starts one. That id then rides tick -> worker -> outbox row ->
+            // alert event -> API consumer, which is the whole causal chain of one
+            // notification in a single searchable value.
+            CorrelationId = Guid.NewGuid().ToString()
+        };
+
+        using var activity = MessagingTelemetry.StartProducerActivity(_options.PricesExchange, properties);
+
         await channel.BasicPublishAsync(
             exchange: _options.PricesExchange,
             routingKey: RabbitMqTopology.RoutingKeyFor(tick.Ticker),
             mandatory: false,
-            basicProperties: new BasicProperties
-            {
-                Persistent = false,
-
-                // A tick has no originating HTTP request to inherit a correlation id from,
-                // so it starts one. That id then rides tick -> worker -> outbox row ->
-                // alert event -> API consumer, which is the whole causal chain of one
-                // notification in a single searchable value.
-                CorrelationId = Guid.NewGuid().ToString()
-            },
+            basicProperties: properties,
             body: body,
             cancellationToken: ct);
     }

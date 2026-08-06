@@ -70,6 +70,8 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
             ContentType = "application/json"
         };
 
+        using var activity = MessagingTelemetry.StartProducerActivity(_options.AlertsExchange, properties);
+
         await channel.BasicPublishAsync(
             exchange: _options.AlertsExchange,
             routingKey: routingKey,

@@ -31,6 +31,8 @@ public sealed class AlertTriggeredConsumer(
     protected override async Task HandleAsync(
         IChannel channel, BasicDeliverEventArgs ea, CancellationToken ct)
     {
+        using var activity = MessagingTelemetry.StartConsumerActivity(Options.NotificationsQueue, ea.BasicProperties);
+
         AlertTriggeredMessage? message;
 
         try

@@ -24,6 +24,8 @@ public sealed class PriceConsumer(
     protected override async Task HandleAsync(
         IChannel channel, BasicDeliverEventArgs ea, CancellationToken ct)
     {
+        using var activity = MessagingTelemetry.StartConsumerActivity(Options.PricesQueue, ea.BasicProperties);
+
         var correlationId = ea.BasicProperties.CorrelationId;
 
         try
