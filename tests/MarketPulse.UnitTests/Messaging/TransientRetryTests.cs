@@ -35,6 +35,25 @@ public class TransientRetryTests
         Assert.Equal(expected, TransientRetry.ReadRetryCount(Properties(headers)));
     }
 
+    [Theory]
+    [InlineData("3", 3)]
+    [InlineData("not-a-number", 0)]
+    public void ReadRetryCount_handles_byte_array_headers(string headerText, int expected)
+    {
+        // RabbitMQ's own client round-trips headers as byte[] (see the int/long cases
+        // above, which cover what *this* code writes back). An unparseable byte[] falling
+        // back to 0 rather than throwing is deliberately safe: the very next republish
+        // overwrites the header with a plain int, so an alien value costs at most one extra
+        // retry round before the int counter takes over for good — it does not reopen the
+        // unbounded loop this task exists to close.
+        var headers = new Dictionary<string, object?>
+        {
+            ["x-retry-count"] = Encoding.UTF8.GetBytes(headerText),
+        };
+
+        Assert.Equal(expected, TransientRetry.ReadRetryCount(Properties(headers)));
+    }
+
     [Fact]
     public async Task Below_the_cap_republishes_with_incremented_count_and_acks()
     {

@@ -255,3 +255,17 @@ reason MassTransit was in decision 3: it is infrastructure this slice would rath
 plainly than configure. The accepted trade is that retries stay hot — at broker speed, no
 backoff — until the cap; five fast, free redeliveries costs less than the delay would, and
 the cap is what turns "forever" into "at most `RetryLimit` attempts."
+
+"Acking the original only once the republish has succeeded" is only actually true because
+`AlertTriggeredConsumer` now opts its channel into publisher confirmations
+(`RabbitMqConsumerService.RequiresPublisherConfirms`), which every other consumer leaves off.
+Without confirms, `BasicPublishAsync` returns once the message is written to the socket, not
+once the broker has accepted it, and `mandatory: true` alone reports an unroutable message
+only through an async `BasicReturnAsync` event nothing here was subscribed to — an awaited
+republish could "succeed," the original get acked, and the copy never actually land, which is
+the exact loss this task exists to prevent. With confirmation tracking on, the client
+correlates the broker's response to the specific publish by sequence number and throws
+(`PublishException`, or `PublishReturnException` for a `basic.return`) if it was nacked or
+unroutable, so `TransientRetry`'s catch — leave the original unacked, let broker redelivery
+retry — is reachable the way the code already assumed. `PriceConsumer`'s channel is
+unaffected: confirmations only change publish behaviour, and it never publishes.

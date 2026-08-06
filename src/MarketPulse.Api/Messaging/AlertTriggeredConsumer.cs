@@ -28,6 +28,12 @@ public sealed class AlertTriggeredConsumer(
 {
     protected override string QueueName => Options.NotificationsQueue;
 
+    // A transient DbUpdateException republishes on this same channel (TransientRetry) before
+    // acking the original. Without publisher confirmations that republish would return once
+    // the bytes hit the socket, not once the broker accepted them — a false "succeeded" that
+    // would let the original be acked while the copy was never actually durable. See ADR-009.
+    protected override bool RequiresPublisherConfirms => true;
+
     protected override async Task HandleAsync(
         IChannel channel, BasicDeliverEventArgs ea, CancellationToken ct)
     {
