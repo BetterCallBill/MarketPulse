@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
+import { MemoryRouter } from 'react-router-dom';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { WatchlistScreen } from './WatchlistScreen';
 
@@ -18,6 +19,9 @@ const server = setupServer(
     }),
   ),
   http.get('http://localhost:5100/api/v1/alerts', () => HttpResponse.json([])),
+  http.get('http://localhost:5100/api/v1/prices/sparklines', () =>
+    HttpResponse.json({ sparklines: { IVV: [100.5, 101.25, 100.75] } }),
+  ),
 );
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
@@ -28,7 +32,9 @@ function renderScreen() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <WatchlistScreen />
+      <MemoryRouter>
+        <WatchlistScreen />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -66,5 +72,18 @@ describe('WatchlistScreen', () => {
         "'IVV' is already on the watchlist.",
       ),
     );
+  });
+
+  it('links the ticker to its price-history page', async () => {
+    renderScreen();
+
+    const link = await screen.findByRole('link', { name: 'IVV price history' });
+    expect(link).toHaveAttribute('href', '/prices/IVV');
+  });
+
+  it('renders a sparkline from the batch endpoint', async () => {
+    const { container } = renderScreen();
+
+    await waitFor(() => expect(container.querySelector('polyline')).not.toBeNull());
   });
 });
