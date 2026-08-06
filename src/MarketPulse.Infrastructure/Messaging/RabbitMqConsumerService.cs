@@ -75,6 +75,17 @@ public abstract class RabbitMqConsumerService : BackgroundService
     protected abstract string QueueName { get; }
 
     /// <summary>
+    /// Whether this consumer's channel needs publisher confirmations. False for a consumer
+    /// that only acks and nacks — a pure consumer never publishes, so paying for confirmation
+    /// tracking on its channel would be pure overhead. A consumer that republishes on its own
+    /// channel (a bounded retry loop, for instance) must override this to true: without
+    /// confirms, <c>BasicPublishAsync</c> completes at socket-write, not broker-accept, so an
+    /// awaited republish that "succeeds" would not actually guarantee the copy landed before
+    /// the original gets acked.
+    /// </summary>
+    protected virtual bool RequiresPublisherConfirms => false;
+
+    /// <summary>
     /// Handles one delivery. Implementations own their own acking and their own failure
     /// classification — this base class deliberately does not ack for them, because "when is
     /// this message safely handled?" is the one question only the consumer can answer.
@@ -101,7 +112,7 @@ public abstract class RabbitMqConsumerService : BackgroundService
                     await Task.Delay(retryDelay, stoppingToken);
                 }
 
-                channel = await _createChannel(false, stoppingToken);
+                channel = await _createChannel(RequiresPublisherConfirms, stoppingToken);
 
                 await RabbitMqTopology.DeclareAsync(channel, Options, stoppingToken);
 

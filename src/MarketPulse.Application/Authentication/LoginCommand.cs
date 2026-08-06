@@ -3,6 +3,7 @@ using MarketPulse.Application.Abstractions;
 using MarketPulse.Application.Configuration;
 using MarketPulse.Domain.Exceptions;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace MarketPulse.Application.Authentication;
@@ -28,7 +29,8 @@ public sealed class LoginHandler(
     IPasswordHasher hasher,
     ITokenService tokens,
     IOptions<JwtOptions> jwt,
-    IOptions<AuthOptions> auth)
+    IOptions<AuthOptions> auth,
+    ILogger<LoginHandler> logger)
     : IRequestHandler<LoginCommand, AuthResult>
 {
     /// <summary>
@@ -50,11 +52,15 @@ public sealed class LoginHandler(
         if (user is null)
         {
             hasher.Verify(DummyHash, request.Password);
+            global::MarketPulse.Application.Telemetry.Telemetry.AuthLoginFailures.Add(1);
+            logger.LogWarning("Failed login attempt for {Email}.", EmailMasking.Mask(request.Email));
             throw new InvalidCredentialsException();
         }
 
         if (user.IsLockedOut(now))
         {
+            global::MarketPulse.Application.Telemetry.Telemetry.AuthLockouts.Add(1);
+            logger.LogWarning("Account locked after repeated failures: {Email}.", EmailMasking.Mask(request.Email));
             throw new AccountLockedException(user.LockoutEndUtc!.Value - now);
         }
 
@@ -62,6 +68,8 @@ public sealed class LoginHandler(
         {
             user.RecordFailedLogin(now, options.MaxFailedAttempts, options.LockoutDuration);
             await users.SaveChangesAsync(ct);
+            global::MarketPulse.Application.Telemetry.Telemetry.AuthLoginFailures.Add(1);
+            logger.LogWarning("Failed login attempt for {Email}.", EmailMasking.Mask(request.Email));
             throw new InvalidCredentialsException();
         }
 

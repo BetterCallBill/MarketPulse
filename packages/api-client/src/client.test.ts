@@ -50,6 +50,20 @@ describe('createApiClient', () => {
     expect((init.headers as Record<string, string>)['X-CSRF-Token']).toBeUndefined();
   });
 
+  it('every request carries a unique X-Correlation-Id', async () => {
+    fetchMock.mockImplementation(() => jsonResponse({ id: 'w1', items: [] }));
+
+    const client = createApiClient(BASE);
+    await client.getWatchlist();
+    await client.getWatchlist();
+
+    const headers1 = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
+    const headers2 = (fetchMock.mock.calls[1]?.[1] as RequestInit).headers as Record<string, string>;
+    expect(headers1['X-Correlation-Id']).toBeTruthy();
+    expect(headers2['X-Correlation-Id']).toBeTruthy();
+    expect(headers1['X-Correlation-Id']).not.toBe(headers2['X-Correlation-Id']);
+  });
+
   it('refreshes once and retries when a request returns 401', async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ title: 'unauthenticated', status: 401 }, 401))

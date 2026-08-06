@@ -93,6 +93,9 @@ export function createApiClient(baseUrl: string) {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
+        // Browser-minted correlation: the middleware honours inbound IDs, so ApiError's
+        // correlationId now matches a searchable server-side trail end to end.
+        'X-Correlation-Id': crypto.randomUUID(),
         ...csrfHeaders(method),
         ...init.headers,
       },

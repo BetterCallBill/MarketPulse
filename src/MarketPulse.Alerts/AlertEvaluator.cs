@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MarketPulse.Application.Abstractions;
+using MarketPulse.Application.Telemetry;
 using MarketPulse.Infrastructure.Messaging.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,8 @@ public sealed class AlertEvaluator(
     public async Task<int> EvaluateAsync(
         PriceTickMessage tick, string? correlationId, CancellationToken ct)
     {
+        Telemetry.AlertsEvaluated.Add(1);
+
         // Queried per tick rather than cached. Four ticks a second against an index on
         // (Ticker, Status) is nothing; the spec names the in-memory cache as the remedy
         // when a real feed lands in slice 6.
@@ -57,6 +60,7 @@ public sealed class AlertEvaluator(
                 // that announces it commit together or not at all. Saving per rule rather
                 // than per tick keeps one lost race from discarding its siblings' work.
                 await rules.SaveChangesAsync(ct);
+                Telemetry.AlertsTriggered.Add(1);
                 triggered++;
             }
             catch (DbUpdateConcurrencyException ex)

@@ -28,9 +28,17 @@ public sealed class AlertTriggeredConsumer(
 {
     protected override string QueueName => Options.NotificationsQueue;
 
+    // A transient DbUpdateException republishes on this same channel (TransientRetry) before
+    // acking the original. Without publisher confirmations that republish would return once
+    // the bytes hit the socket, not once the broker accepted them — a false "succeeded" that
+    // would let the original be acked while the copy was never actually durable. See ADR-009.
+    protected override bool RequiresPublisherConfirms => true;
+
     protected override async Task HandleAsync(
         IChannel channel, BasicDeliverEventArgs ea, CancellationToken ct)
     {
+        using var activity = MessagingTelemetry.StartConsumerActivity(Options.NotificationsQueue, ea.BasicProperties);
+
         AlertTriggeredMessage? message;
 
         try
@@ -98,13 +106,13 @@ public sealed class AlertTriggeredConsumer(
         }
         catch (DbUpdateException ex)
         {
-            // The database is unreachable or otherwise unhappy — the alert is real and the
-            // fault is ours, so requeue. Dead-lettering here would lose exactly what the
-            // outbox exists to protect. This can loop while SQL Server is down; that is
-            // deliberate, and the redelivery counter that would bound it is named in the
-            // spec as observability-slice work.
-            logger.LogWarning(ex, "Transient failure persisting a notification; requeueing.");
-            await channel.BasicNackAsync(ea.DeliveryTag, multiple: false, requeue: true, ct);
+            // The database is unreachable or otherwise unhappy — the alert is real and the fault
+            // is ours, so retry. Bounded since slice 8 (ADR-009's deferred work): republish with
+            // an incremented x-retry-count, dead-letter at RetryLimit. Dead-lettering *before*
+            // the cap would lose exactly what the outbox exists to protect.
+            logger.LogWarning(ex, "Transient failure persisting a notification; retrying.");
+            await TransientRetry.RetryOrDeadLetterAsync(
+                channel, ea, Options.NotificationsQueue, Options.RetryLimit, logger, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

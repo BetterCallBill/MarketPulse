@@ -48,6 +48,13 @@ public sealed class RabbitMqOptions
     [Range(1, 65535)]
     public ushort PrefetchCount { get; init; } = 100;
 
+    /// <summary>
+    /// Bound on the transient-failure redelivery loop (ADR-009): a message that fails
+    /// transiently this many times is dead-lettered instead of retried forever.
+    /// </summary>
+    [Range(1, 100)]
+    public int RetryLimit { get; init; } = 5;
+
     /// <summary>Cap on the connection retry backoff.</summary>
     public TimeSpan MaxConnectionRetryDelay { get; init; } = TimeSpan.FromSeconds(30);
 }

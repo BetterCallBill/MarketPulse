@@ -1,4 +1,5 @@
 using MarketPulse.Application.Configuration;
+using MarketPulse.Application.Telemetry;
 using MarketPulse.Domain.ValueObjects;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -82,6 +83,7 @@ public sealed class TickPersistenceService(
             await using var scope = scopes.CreateAsyncScope();
             var writer = scope.ServiceProvider.GetRequiredService<IPriceTickBatchWriter>();
             await writer.WriteAsync(chunk, ct);
+            Telemetry.TicksPersisted.Add(chunk.Count);
 
             if (chunk.Count < chunkSize)
             {

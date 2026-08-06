@@ -238,10 +238,40 @@ instance never won. This is what `IOutbox.Discard` exists for, and it is the one
 outbox pattern's "the caller's single `SaveChanges` is what makes it atomic" contract needs
 a way to say "not that one, after all."
 
-**The requeue loop has no bound until the observability slice adds one.** A transient
-failure (database unreachable, connection reset) on the consumer side is nacked with
-requeue, deliberately, so a redelivered alert is never lost to a database blip. If the
-database stays down, the same message can loop between the consumer and the queue
-indefinitely. Distinguishing a slow-burning transient fault from a permanent one — a
-redelivery counter, or a delayed retry queue — is a real gap, named here rather than glossed
-over, and belongs with the observability slice, where there is somewhere to see it happening.
+**The requeue loop is bounded, as of the observability slice.** A transient failure
+(database unreachable, connection reset) on the consumer side used to be nacked with
+requeue — deliberately, so a redelivered alert was never lost to a database blip, but with
+no limit: if the database stayed down, the same message could loop between the consumer and
+the queue indefinitely. `TransientRetry` replaces the bare requeue with a republish to the
+same queue carrying an incremented `x-retry-count` header, acking the original only once
+the republish has succeeded; a plain nack+requeue could not have counted anything, because a
+requeued message comes back with identical headers. Past `RabbitMqOptions.RetryLimit`
+(default 5) the message is nacked without requeue instead, landing on the dead-letter queue
+the topology already provides. Both paths are now visible —
+`marketpulse.notifications.redeliveries` and `marketpulse.notifications.dead_letters` —
+which is what the observability slice was for. The bound's reach is narrower than "a
+transient failure" implies, though: it operates on `DbUpdateException`-shaped transients,
+the fault the classification was written against, and a connection-open `SqlException` —
+what a fully unreachable database actually throws — currently falls through to the
+catch-all and dead-letters on the first attempt instead of entering the bounded-retry loop.
+No message is lost either way (the DLQ still catches it), but widening the classification
+to cover connection-open failures is not this slice's work; it is slice 11's. A delayed retry queue (redelivering after a
+backoff rather than immediately) was the heavier alternative and is rejected for the same
+reason MassTransit was in decision 3: it is infrastructure this slice would rather author
+plainly than configure. The accepted trade is that retries stay hot — at broker speed, no
+backoff — until the cap; five fast, free redeliveries costs less than the delay would, and
+the cap is what turns "forever" into "at most `RetryLimit` attempts."
+
+"Acking the original only once the republish has succeeded" is only actually true because
+`AlertTriggeredConsumer` now opts its channel into publisher confirmations
+(`RabbitMqConsumerService.RequiresPublisherConfirms`), which every other consumer leaves off.
+Without confirms, `BasicPublishAsync` returns once the message is written to the socket, not
+once the broker has accepted it, and `mandatory: true` alone reports an unroutable message
+only through an async `BasicReturnAsync` event nothing here was subscribed to — an awaited
+republish could "succeed," the original get acked, and the copy never actually land, which is
+the exact loss this task exists to prevent. With confirmation tracking on, the client
+correlates the broker's response to the specific publish by sequence number and throws
+(`PublishException`, or `PublishReturnException` for a `basic.return`) if it was nacked or
+unroutable, so `TransientRetry`'s catch — leave the original unacked, let broker redelivery
+retry — is reachable the way the code already assumed. `PriceConsumer`'s channel is
+unaffected: confirmations only change publish behaviour, and it never publishes.

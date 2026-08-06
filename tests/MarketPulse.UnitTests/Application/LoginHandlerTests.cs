@@ -1,13 +1,18 @@
+using System.Diagnostics.Metrics;
 using MarketPulse.Application.Abstractions;
 using MarketPulse.Application.Authentication;
 using MarketPulse.Application.Configuration;
 using MarketPulse.Domain.Entities;
 using MarketPulse.Domain.Exceptions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 
 namespace MarketPulse.UnitTests.Application;
 
+[Collection("MetricCounters")]
 public class LoginHandlerTests
 {
     private readonly IUserRepository _users = Substitute.For<IUserRepository>();
@@ -28,9 +33,9 @@ public class LoginHandlerTests
         Audience = "t"
     };
 
-    private LoginHandler CreateHandler() => new(
+    private LoginHandler CreateHandler(ILogger<LoginHandler>? logger = null) => new(
         _users, _refreshTokens, _hasher, _tokens,
-        Options.Create(Jwt), Options.Create(Auth));
+        Options.Create(Jwt), Options.Create(Auth), logger ?? NullLogger<LoginHandler>.Instance);
 
     private static User AUser() =>
         User.Register("someone@marketpulse.local", "stored-hash");
@@ -118,5 +123,66 @@ public class LoginHandlerTests
         Assert.Equal("refresh-token", result.RefreshToken);
         Assert.Equal(user.Id, result.UserId);
         Assert.Equal(0, user.FailedLoginCount);
+    }
+
+    [Fact]
+    public async Task A_wrong_password_logs_a_masked_email_and_increments_login_failures()
+    {
+        var user = AUser();
+        _users.GetByEmailAsync(user.Email, Arg.Any<CancellationToken>()).Returns(user);
+        _hasher.Verify("stored-hash", "wrong-password").Returns(false);
+        var logger = new FakeLogger<LoginHandler>();
+
+        var delta = await MeasureCounterDeltaAsync(
+            global::MarketPulse.Application.Telemetry.Telemetry.AuthLoginFailures,
+            () => Assert.ThrowsAsync<InvalidCredentialsException>(() =>
+                CreateHandler(logger).Handle(
+                    new LoginCommand(user.Email, "wrong-password"), CancellationToken.None)));
+
+        Assert.Equal(1, delta);
+
+        var record = Assert.Single(logger.Collector.GetSnapshot());
+        Assert.Equal(LogLevel.Warning, record.Level);
+        Assert.Contains("s***@marketpulse.local", record.Message);
+        Assert.DoesNotContain(user.Email, record.Message);
+    }
+
+    [Fact]
+    public async Task A_locked_account_increments_the_lockout_counter()
+    {
+        var user = AUser();
+        for (var i = 0; i < 5; i++)
+        {
+            user.RecordFailedLogin(DateTimeOffset.UtcNow, 5, TimeSpan.FromMinutes(15));
+        }
+
+        _users.GetByEmailAsync(user.Email, Arg.Any<CancellationToken>()).Returns(user);
+
+        var delta = await MeasureCounterDeltaAsync(
+            global::MarketPulse.Application.Telemetry.Telemetry.AuthLockouts,
+            () => Assert.ThrowsAsync<AccountLockedException>(() =>
+                CreateHandler().Handle(
+                    new LoginCommand(user.Email, "correct-password"), CancellationToken.None)));
+
+        Assert.Equal(1, delta);
+    }
+
+    private static async Task<long> MeasureCounterDeltaAsync(Counter<long> counter, Func<Task> act)
+    {
+        long observed = 0;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument == counter)
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, _, _) => observed += value);
+        listener.Start();
+
+        var before = observed;
+        await act();
+        return observed - before;
     }
 }

@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using MarketPulse.Api;
 using MarketPulse.Api.Authentication;
 using MarketPulse.Api.Filters;
+using MarketPulse.Api.Health;
 using MarketPulse.Api.Hubs;
 using MarketPulse.Api.Messaging;
 using MarketPulse.Api.Middleware;
@@ -11,13 +12,54 @@ using MarketPulse.Application;
 using MarketPulse.Application.Abstractions;
 using MarketPulse.Application.Configuration;
 using MarketPulse.Infrastructure;
+using MarketPulse.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var otlpEndpoint = builder.Configuration[$"{OtelOptions.SectionName}:OtlpEndpoint"]
+    ?? "http://localhost:4317";
+
+// Serilog is bootstrap-only: application code stays on ILogger<T>. Console gets compact
+// JSON; OTLP carries the same structured events (scope properties included) to the
+// Aspire dashboard. When no collector listens, the sink drops batches quietly.
+builder.Host.UseSerilog((context, loggerConfiguration) => loggerConfiguration
+    .ReadFrom.Configuration(context.Configuration)
+    .Enrich.FromLogContext()
+    .WriteTo.Console(new Serilog.Formatting.Compact.CompactJsonFormatter())
+    .WriteTo.OpenTelemetry(o =>
+    {
+        o.Endpoint = otlpEndpoint;
+        o.ResourceAttributes = new Dictionary<string, object> { ["service.name"] = "marketpulse-api" };
+    }));
+
+builder.Services.AddOptions<OtelOptions>()
+    .Bind(builder.Configuration.GetSection(OtelOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService("marketpulse-api"))
+    .WithTracing(t => t
+        .AddAspNetCoreInstrumentation(o =>
+            o.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health"))
+        .AddHttpClientInstrumentation()
+        .AddSqlClientInstrumentation()
+        .AddSource(MarketPulse.Application.Telemetry.Telemetry.MessagingSourceName)
+        .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint)))
+    .WithMetrics(m => m
+        .AddAspNetCoreInstrumentation()
+        .AddRuntimeInstrumentation()
+        .AddMeter(MarketPulse.Application.Telemetry.Telemetry.MeterName)
+        .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint)));
 
 var connectionString = builder.Configuration.GetConnectionString("MarketPulse")
     ?? throw new InvalidOperationException("ConnectionStrings:MarketPulse is not configured.");
@@ -160,6 +202,10 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<IdempotencyFilter>();
 
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<MarketPulseDbContext>("sqlserver")
+    .AddCheck<RabbitMqHealthCheck>("rabbitmq");
+
 var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? ["http://localhost:5173"];
 
@@ -172,6 +218,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
 var app = builder.Build();
 
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseSerilogRequestLogging();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors();
 app.UseRateLimiter();
@@ -182,7 +229,25 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<PriceHub>("/hubs/prices");
 app.MapHub<NotificationHub>("/hubs/notifications");
+// Liveness: dependency-free by design — Playwright and load balancers poll this.
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+            }),
+        });
+    },
+}).AllowAnonymous();
 
 app.Run();
 

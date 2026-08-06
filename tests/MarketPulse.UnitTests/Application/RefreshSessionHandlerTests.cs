@@ -1,13 +1,18 @@
+using System.Diagnostics.Metrics;
 using MarketPulse.Application.Abstractions;
 using MarketPulse.Application.Authentication;
 using MarketPulse.Application.Configuration;
 using MarketPulse.Domain.Entities;
 using MarketPulse.Domain.Exceptions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 
 namespace MarketPulse.UnitTests.Application;
 
+[Collection("MetricCounters")]
 public class RefreshSessionHandlerTests
 {
     private readonly IUserRepository _users = Substitute.For<IUserRepository>();
@@ -24,8 +29,9 @@ public class RefreshSessionHandlerTests
 
     private readonly User _user = User.Register("someone@marketpulse.local", "hash");
 
-    private RefreshSessionHandler CreateHandler() =>
-        new(_users, _refreshTokens, _tokens, Options.Create(Jwt));
+    private RefreshSessionHandler CreateHandler(ILogger<RefreshSessionHandler>? logger = null) =>
+        new(_users, _refreshTokens, _tokens, Options.Create(Jwt),
+            logger ?? NullLogger<RefreshSessionHandler>.Instance);
 
     public RefreshSessionHandlerTests()
     {
@@ -69,6 +75,47 @@ public class RefreshSessionHandlerTests
 
         await _refreshTokens.Received().RevokeAllForUserAsync(
             _user.Id, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Replaying_a_revoked_token_increments_reuse_metric_and_logs_the_user_id()
+    {
+        var revoked = RefreshToken.Issue(
+            _user.Id, "presented-hash", DateTimeOffset.UtcNow, TimeSpan.FromDays(14));
+        revoked.Revoke(DateTimeOffset.UtcNow);
+        _refreshTokens.GetByHashAsync("presented-hash", Arg.Any<CancellationToken>()).Returns(revoked);
+        var logger = new FakeLogger<RefreshSessionHandler>();
+
+        var delta = await MeasureCounterDeltaAsync(
+            global::MarketPulse.Application.Telemetry.Telemetry.AuthRefreshReuse,
+            () => Assert.ThrowsAsync<SessionRevokedException>(() =>
+                CreateHandler(logger).Handle(
+                    new RefreshSessionCommand("presented"), CancellationToken.None)));
+
+        Assert.Equal(1, delta);
+
+        var record = Assert.Single(logger.Collector.GetSnapshot());
+        Assert.Equal(LogLevel.Warning, record.Level);
+        Assert.Contains(_user.Id.ToString(), record.Message);
+    }
+
+    private static async Task<long> MeasureCounterDeltaAsync(Counter<long> counter, Func<Task> act)
+    {
+        long observed = 0;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument == counter)
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, _, _) => observed += value);
+        listener.Start();
+
+        var before = observed;
+        await act();
+        return observed - before;
     }
 
     [Fact]
