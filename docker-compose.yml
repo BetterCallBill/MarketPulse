@@ -34,5 +34,13 @@ services:
       retries: 12
       start_period: 20s
 
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:9.1
+    environment:
+      DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "18888:18888" # UI
+      - "4317:18889"  # OTLP/gRPC in
+
 volumes:
   mssql-data:

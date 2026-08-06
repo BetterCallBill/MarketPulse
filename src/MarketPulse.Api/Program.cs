@@ -16,8 +16,48 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var otlpEndpoint = builder.Configuration[$"{OtelOptions.SectionName}:OtlpEndpoint"]
+    ?? "http://localhost:4317";
+
+// Serilog is bootstrap-only: application code stays on ILogger<T>. Console gets compact
+// JSON; OTLP carries the same structured events (scope properties included) to the
+// Aspire dashboard. When no collector listens, the sink drops batches quietly.
+builder.Host.UseSerilog((context, loggerConfiguration) => loggerConfiguration
+    .ReadFrom.Configuration(context.Configuration)
+    .Enrich.FromLogContext()
+    .WriteTo.Console(new Serilog.Formatting.Compact.CompactJsonFormatter())
+    .WriteTo.OpenTelemetry(o =>
+    {
+        o.Endpoint = otlpEndpoint;
+        o.ResourceAttributes = new Dictionary<string, object> { ["service.name"] = "marketpulse-api" };
+    }));
+
+builder.Services.AddOptions<OtelOptions>()
+    .Bind(builder.Configuration.GetSection(OtelOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService("marketpulse-api"))
+    .WithTracing(t => t
+        .AddAspNetCoreInstrumentation(o =>
+            o.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health"))
+        .AddHttpClientInstrumentation()
+        .AddSqlClientInstrumentation()
+        .AddSource(MarketPulse.Application.Telemetry.Telemetry.MessagingSourceName)
+        .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint)))
+    .WithMetrics(m => m
+        .AddAspNetCoreInstrumentation()
+        .AddRuntimeInstrumentation()
+        .AddMeter(MarketPulse.Application.Telemetry.Telemetry.MeterName)
+        .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint)));
 
 var connectionString = builder.Configuration.GetConnectionString("MarketPulse")
     ?? throw new InvalidOperationException("ConnectionStrings:MarketPulse is not configured.");
@@ -172,6 +212,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
 var app = builder.Build();
 
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseSerilogRequestLogging();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors();
 app.UseRateLimiter();
