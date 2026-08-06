@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using MarketPulse.Application.Configuration;
+using MarketPulse.Application.Telemetry;
 using MarketPulse.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -25,9 +26,13 @@ public sealed class TickBuffer
                 SingleReader = true,
                 SingleWriter = false
             },
-            dropped => logger.LogWarning(
-                "Tick buffer full; dropped oldest tick {Ticker}@{TimestampUtc:u}.",
-                dropped.Ticker, dropped.TimestampUtc));
+            dropped =>
+            {
+                Telemetry.TickBufferDrops.Add(1);
+                logger.LogWarning(
+                    "Tick buffer full; dropped oldest tick {Ticker}@{TimestampUtc:u}.",
+                    dropped.Ticker, dropped.TimestampUtc);
+            });
     }
 
     public ChannelWriter<PriceTick> Writer => _channel.Writer;

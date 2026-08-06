@@ -38,10 +38,14 @@ public class TickPersistenceServiceTests
         buffer.Writer.TryWrite(Tick(1m));
         buffer.Writer.TryWrite(Tick(2m));
 
-        await service.FlushAsync(CancellationToken.None);
+        var persisted = await MetricHelper.Measure("marketpulse.ticks.persisted", async () =>
+        {
+            await service.FlushAsync(CancellationToken.None);
+        });
 
         await writer.Received(1).WriteAsync(
             Arg.Is<IReadOnlyList<PriceTick>>(b => b!.Count == 2), Arg.Any<CancellationToken>());
+        Assert.Equal(2, persisted); // Verify metric captured 2 persisted ticks
     }
 
     [Fact]
