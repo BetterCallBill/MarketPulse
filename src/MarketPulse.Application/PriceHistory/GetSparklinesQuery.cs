@@ -24,16 +24,13 @@ public sealed class GetSparklinesHandler(
         var to = timeProvider.GetUtcNow();
         var from = to.AddMinutes(-options.Value.SparklineWindowMinutes);
 
-        // DELIBERATE N+1 (ADR-006): one candle query per watchlist ticker. Correct and
-        // fully tested — which is the point: no test in this suite can see the defect.
-        // Measured and replaced by a set-based read later in this same slice; both
-        // measurements live in docs/sql/.
-        var sparklines = new Dictionary<string, IReadOnlyList<decimal>>();
-        foreach (var ticker in tickers)
-        {
-            var candles = await reader.GetCandlesAsync(ticker, 60, from, to, ct);
-            sparklines[ticker] = candles.Select(c => c.Close).ToList();
-        }
+        // Set-based since ADR-006: one query for every ticker, then empty lists filled in for
+        // tickers with no ticks in the window so the response shape stays total over the watchlist.
+        var withData = await reader.GetSparklinesAsync(tickers, from, to, ct);
+        var sparklines = tickers.ToDictionary(
+            t => t,
+            t => withData.GetValueOrDefault(t, []),
+            StringComparer.Ordinal);
 
         return new SparklinesDto(sparklines);
     }
