@@ -52,6 +52,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddDbContext<MarketPulseDbContext>(
             o => o.UseSqlServer(connectionString), optionsLifetime: ServiceLifetime.Singleton);
         services.AddSingleton<ISqlConnectionFactory>(new SqlConnectionFactory(connectionString));
+        services.AddScoped<IPriceHistoryReader, DapperPriceHistoryReader>();
         services.AddScoped<IWatchlistRepository, WatchlistRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
