@@ -1,3 +1,4 @@
+using MarketPulse.Application.Abstractions;
 using MarketPulse.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -30,9 +31,13 @@ public static class TestFactory
     {
         var settings = new Dictionary<string, string?>
         {
-            // The Dapper connection factory is built from the connection string Program.cs reads
-            // off configuration — unlike the DbContextOptions replacement below, it cannot be
-            // swapped after the fact, so the configuration itself must point at the container.
+            // Program.cs reads this into a local `connectionString` before the host finishes
+            // building, so it's read too early to observe the ConfigureAppConfiguration
+            // override below (that override only lands once WithWebHostBuilder finishes
+            // composing the host). Setting it here keeps every *other* configuration-bound
+            // read (Options-pattern ones, resolved lazily post-Build) correct, but the
+            // Dapper connection factory built from that local variable — see the
+            // ConfigureServices override below — needs its own explicit replacement.
             ["ConnectionStrings:MarketPulse"] = fixture.ConnectionString,
             ["Auth:LoginRequestsPerMinute"] = UnthrottledAuthRequestsPerMinute
         };
@@ -61,6 +66,18 @@ public static class TestFactory
                 // dependency before a single request runs.
                 services.AddDbContextFactory<MarketPulseDbContext>(
                     o => o.UseSqlServer(fixture.ConnectionString));
+
+                // Same problem as the DbContext above, same fix: replace the singleton that
+                // was built from the too-early connection string with one that points
+                // directly at the container. Without this, DapperPriceHistoryReader silently
+                // queries whatever ConnectionStrings:MarketPulse resolved to in
+                // appsettings.Development.json — a real local SQL Server on this machine —
+                // rather than the fixture, returning empty results with no error.
+                var sqlConnectionFactory = services.Single(
+                    d => d.ServiceType == typeof(ISqlConnectionFactory));
+                services.Remove(sqlConnectionFactory);
+                services.AddSingleton<ISqlConnectionFactory>(
+                    new SqlConnectionFactory(fixture.ConnectionString));
             });
         });
     }

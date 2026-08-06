@@ -18,4 +18,8 @@ public sealed class PricesController(ISender sender) : ControllerBase
         [FromQuery] string to = "",
         CancellationToken ct = default) =>
         Ok(await sender.Send(new GetCandlesQuery(ticker, interval, from, to), ct));
+
+    [HttpGet("sparklines")]
+    public async Task<ActionResult<SparklinesDto>> GetSparklines(CancellationToken ct) =>
+        Ok(await sender.Send(new GetSparklinesQuery(), ct));
 }
