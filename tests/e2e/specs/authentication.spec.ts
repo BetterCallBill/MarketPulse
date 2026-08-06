@@ -30,7 +30,12 @@ test('a new user can register, add a ticker, watch it tick, and sign out', async
   // The price cell is fed by SignalR, which authenticated off the same cookie. If the
   // hub rejected the connection this stays at the em-dash placeholder forever.
   // PriceCell already exposes aria-label={`${ticker} price`} — no source change needed.
-  await expect(page.getByLabel('IVV price')).toHaveText(/^\$\d/, { timeout: 15_000 });
+  // Exact match: the ticker's watchlist-row link now carries aria-label
+  // "IVV price history" (slice 7b), which a non-exact getByLabel('IVV price') also
+  // matches as a substring — ambiguous without `exact`.
+  await expect(page.getByLabel('IVV price', { exact: true })).toHaveText(/^\$\d/, {
+    timeout: 15_000,
+  });
 
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL(/\/login$/);

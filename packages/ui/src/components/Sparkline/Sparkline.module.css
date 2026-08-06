@@ -1,0 +1,10 @@
+.sparkline {
+  display: block;
+}
+
+.sparkline polyline {
+  stroke: var(--mp-accent);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}

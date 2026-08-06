@@ -1,10 +1,12 @@
-import { Alert, Button, Panel, StatusDot, TextField, VisuallyHidden } from '@marketpulse/ui';
+import { Alert, Button, Panel, Sparkline, StatusDot, TextField, VisuallyHidden } from '@marketpulse/ui';
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { AlertCell } from '../alerts/AlertCell';
 import { PriceCell } from '../prices/PriceCell';
 import { isStale } from '../prices/streamReducer';
 import { useNow } from '../prices/useNow';
 import { usePriceStream } from '../prices/usePriceStream';
+import { useSparklines } from '../prices/useSparklines';
 import styles from './WatchlistScreen.module.css';
 import { useAddItem, useRemoveItem, useWatchlist } from './useWatchlist';
 
@@ -15,6 +17,7 @@ export function WatchlistScreen() {
   const [ticker, setTicker] = useState('');
   const stream = usePriceStream();
   const now = useNow();
+  const sparklines = useSparklines().data?.sparklines ?? {};
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -73,6 +76,7 @@ export function WatchlistScreen() {
                 <th scope="col" className={styles.numeric}>
                   Last
                 </th>
+                <th scope="col">Trend</th>
                 <th scope="col">Alert</th>
                 <th scope="col" className={styles.actions}>
                   <VisuallyHidden>Actions</VisuallyHidden>
@@ -85,7 +89,15 @@ export function WatchlistScreen() {
 
                 return (
                   <tr key={item.ticker}>
-                    <td className={styles.ticker}>{item.ticker}</td>
+                    <td className={styles.ticker}>
+                      <Link
+                        className={styles.tickerLink}
+                        to={`/prices/${item.ticker}`}
+                        aria-label={`${item.ticker} price history`}
+                      >
+                        {item.ticker}
+                      </Link>
+                    </td>
                     <td className={styles.numeric}>
                       <PriceCell
                         ticker={item.ticker}
@@ -95,6 +107,9 @@ export function WatchlistScreen() {
                         direction={entry?.direction ?? 'neutral'}
                         seq={entry?.seq ?? 0}
                       />
+                    </td>
+                    <td>
+                      <Sparkline points={sparklines[item.ticker] ?? []} />
                     </td>
                     <td>
                       <AlertCell ticker={item.ticker} />

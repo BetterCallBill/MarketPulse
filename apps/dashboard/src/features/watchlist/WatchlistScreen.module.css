@@ -54,6 +54,15 @@
   font-weight: 600;
 }
 
+.tickerLink {
+  color: inherit;
+  text-decoration: none;
+}
+
+.tickerLink:hover {
+  text-decoration: underline;
+}
+
 .numeric {
   text-align: right;
 }

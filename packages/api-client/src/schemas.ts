@@ -79,6 +79,26 @@ export const transactionSchema = z.object({
   recordedUtc: z.string(),
 });
 
+export const candleIntervalSchema = z.enum(['1m', '5m', '1h', '1d']);
+
+export const candleSchema = z.object({
+  t: z.string().datetime({ offset: true }),
+  o: z.number(),
+  h: z.number(),
+  l: z.number(),
+  c: z.number(),
+});
+
+export const candlesSchema = z.object({
+  ticker: z.string().min(1).max(8),
+  interval: candleIntervalSchema,
+  candles: z.array(candleSchema),
+});
+
+export const sparklinesSchema = z.object({
+  sparklines: z.record(z.string(), z.array(z.number())),
+});
+
 export type WatchlistItem = z.infer<typeof watchlistItemSchema>;
 export type Watchlist = z.infer<typeof watchlistSchema>;
 export type Tick = z.infer<typeof tickSchema>;
@@ -92,3 +112,7 @@ export type TradeSide = z.infer<typeof tradeSideSchema>;
 export type Holding = z.infer<typeof holdingSchema>;
 export type Portfolio = z.infer<typeof portfolioSchema>;
 export type Transaction = z.infer<typeof transactionSchema>;
+export type CandleInterval = z.infer<typeof candleIntervalSchema>;
+export type Candle = z.infer<typeof candleSchema>;
+export type Candles = z.infer<typeof candlesSchema>;
+export type Sparklines = z.infer<typeof sparklinesSchema>;

@@ -1,0 +1,31 @@
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--mp-space-4);
+}
+
+.heading {
+  margin: 0 0 var(--mp-space-4);
+}
+
+.intervals {
+  display: flex;
+  gap: var(--mp-space-2);
+  margin-bottom: var(--mp-space-4);
+}
+
+.intervalButton {
+  background: var(--mp-surface-raised);
+  color: var(--mp-text-primary);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-sm);
+  padding: var(--mp-space-1) var(--mp-space-3);
+  font-family: var(--mp-font-mono);
+  cursor: pointer;
+}
+
+.intervalButton[aria-pressed='true'] {
+  border-color: var(--mp-accent);
+  color: var(--mp-accent);
+}

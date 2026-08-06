@@ -232,4 +232,54 @@ describe('createApiClient', () => {
 
     expect(portfolio.holdings[0]?.averageCost).toBe(60);
   });
+
+  describe('price history', () => {
+    it('getCandles hits the right URL and parses the response', async () => {
+      let seenUrl = '';
+      fetchMock.mockImplementation((url: string) => {
+        seenUrl = url;
+        return Promise.resolve(
+          jsonResponse({
+            ticker: 'IVV',
+            interval: '5m',
+            candles: [{ t: '2026-08-06T10:00:00+00:00', o: 10, h: 12, l: 9, c: 11 }],
+          }),
+        );
+      });
+
+      const result = await createApiClient(BASE).getCandles(
+        'IVV', '5m', '2026-08-06T04:00:00.000Z', '2026-08-06T10:00:00.000Z',
+      );
+
+      expect(result.candles).toHaveLength(1);
+      const url = new URL(seenUrl);
+      expect(url.pathname).toBe('/api/v1/prices/IVV/candles');
+      expect(url.searchParams.get('interval')).toBe('5m');
+      expect(url.searchParams.get('from')).toBe('2026-08-06T04:00:00.000Z');
+      expect(url.searchParams.get('to')).toBe('2026-08-06T10:00:00.000Z');
+    });
+
+    it('getCandles surfaces the unknown-ticker slug as ApiError', async () => {
+      fetchMock.mockResolvedValue(
+        new Response(
+          JSON.stringify({ title: 'unknown-ticker', status: 404, detail: "Ticker 'ZZZZ' is not a known instrument." }),
+          { status: 404, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      );
+
+      await expect(
+        createApiClient(BASE).getCandles('ZZZZ', '1m', '2026-08-06T04:00:00.000Z', '2026-08-06T10:00:00.000Z'),
+      ).rejects.toMatchObject({ status: 404, errorCode: 'unknown-ticker' });
+    });
+
+    it('getSparklines parses the batch payload', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse({ sparklines: { IVV: [101, 102] } }),
+      );
+
+      const result = await createApiClient(BASE).getSparklines();
+
+      expect(result.sparklines['IVV']).toEqual([101, 102]);
+    });
+  });
 });
