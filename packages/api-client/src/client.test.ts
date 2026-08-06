@@ -253,6 +253,7 @@ describe('createApiClient', () => {
 
       expect(result.candles).toHaveLength(1);
       const url = new URL(seenUrl);
+      expect(url.pathname).toBe('/api/v1/prices/IVV/candles');
       expect(url.searchParams.get('interval')).toBe('5m');
       expect(url.searchParams.get('from')).toBe('2026-08-06T04:00:00.000Z');
       expect(url.searchParams.get('to')).toBe('2026-08-06T10:00:00.000Z');
