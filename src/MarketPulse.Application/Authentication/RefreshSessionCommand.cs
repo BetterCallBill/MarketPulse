@@ -3,6 +3,7 @@ using MarketPulse.Application.Configuration;
 using MarketPulse.Domain.Entities;
 using MarketPulse.Domain.Exceptions;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace MarketPulse.Application.Authentication;
@@ -13,7 +14,8 @@ public sealed class RefreshSessionHandler(
     IUserRepository users,
     IRefreshTokenRepository refreshTokens,
     ITokenService tokens,
-    IOptions<JwtOptions> jwt)
+    IOptions<JwtOptions> jwt,
+    ILogger<RefreshSessionHandler> logger)
     : IRequestHandler<RefreshSessionCommand, AuthResult>
 {
     public async Task<AuthResult> Handle(RefreshSessionCommand request, CancellationToken ct)
@@ -34,6 +36,10 @@ public sealed class RefreshSessionHandler(
         {
             await refreshTokens.RevokeAllForUserAsync(existing.UserId, now, ct);
             await refreshTokens.SaveChangesAsync(ct);
+            global::MarketPulse.Application.Telemetry.Telemetry.AuthRefreshReuse.Add(1);
+            logger.LogWarning(
+                "Refresh-token reuse detected for user {UserId}; revoking the token family.",
+                existing.UserId);
             throw new SessionRevokedException();
         }
 
