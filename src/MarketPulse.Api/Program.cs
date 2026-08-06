@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using MarketPulse.Api;
 using MarketPulse.Api.Authentication;
 using MarketPulse.Api.Filters;
+using MarketPulse.Api.Health;
 using MarketPulse.Api.Hubs;
 using MarketPulse.Api.Messaging;
 using MarketPulse.Api.Middleware;
@@ -11,6 +12,7 @@ using MarketPulse.Application;
 using MarketPulse.Application.Abstractions;
 using MarketPulse.Application.Configuration;
 using MarketPulse.Infrastructure;
+using MarketPulse.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -200,6 +202,10 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<IdempotencyFilter>();
 
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<MarketPulseDbContext>("sqlserver")
+    .AddCheck<RabbitMqHealthCheck>("rabbitmq");
+
 var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? ["http://localhost:5173"];
 
@@ -223,7 +229,25 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<PriceHub>("/hubs/prices");
 app.MapHub<NotificationHub>("/hubs/notifications");
+// Liveness: dependency-free by design — Playwright and load balancers poll this.
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+            }),
+        });
+    },
+}).AllowAnonymous();
 
 app.Run();
 
