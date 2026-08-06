@@ -356,7 +356,7 @@ marketpulse-pro/
 │   ├── MarketPulse.UnitTests/         # xUnit + NSubstitute
 │   ├── MarketPulse.IntegrationTests/  # WebApplicationFactory + Testcontainers
 │   └── e2e/                           # Playwright suites
-├── infra/                             # Terraform (ECS, Lambda, RDS, S3, IAM, VPC)
+├── infra/                             # Terraform (VPC, ECS, RDS, MQ, S3+CloudFront) — Lambda arrives with slice 10
 ├── docs/
 │   ├── adr/                           # Architecture Decision Records
 │   ├── sql/                           # Execution plans, index analysis
@@ -504,7 +504,7 @@ deliberate.
 - [ ] p95 API latency < 200ms under ingestion load (documented load test)
 - [ ] Every significant decision has an ADR with rejected alternatives
 - [ ] Six engineering write-ups documented with real metrics
-- [ ] Infra reproducible from scratch with `terraform apply`
+- [ ] Infra reproducible from scratch with `terraform apply` — configuration shipped in slice 9 (`fmt`/`validate`-clean, CI-gated); the box stays unticked until the live apply rehearsal runs
 
 ---
 

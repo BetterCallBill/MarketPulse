@@ -33,6 +33,21 @@ jobs:
       - run: pnpm test
       - run: pnpm --filter @marketpulse/dashboard build
 
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.15.7'
+      - run: terraform fmt -check -recursive
+        working-directory: infra
+      # -backend=false: validation needs providers, not state or credentials.
+      - run: terraform init -backend=false && terraform validate
+        working-directory: infra/bootstrap
+      - run: terraform init -backend=false && terraform validate
+        working-directory: infra
+
   docker:
     runs-on: ubuntu-latest
     needs: [backend, frontend]
@@ -45,6 +60,12 @@ jobs:
           file: src/MarketPulse.Api/Dockerfile
           push: false
           tags: marketpulse-api:ci
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/MarketPulse.Alerts/Dockerfile
+          push: false
+          tags: marketpulse-alerts:ci
 
   e2e:
     runs-on: ubuntu-latest
