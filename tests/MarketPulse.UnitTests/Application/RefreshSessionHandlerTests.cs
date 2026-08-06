@@ -12,6 +12,7 @@ using NSubstitute;
 
 namespace MarketPulse.UnitTests.Application;
 
+[Collection("MetricCounters")]
 public class RefreshSessionHandlerTests
 {
     private readonly IUserRepository _users = Substitute.For<IUserRepository>();

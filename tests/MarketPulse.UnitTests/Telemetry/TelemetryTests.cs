@@ -3,6 +3,7 @@ using MarketPulse.Application.Telemetry;
 
 namespace MarketPulse.UnitTests.Telemetry;
 
+[Collection("MetricCounters")]
 public class TelemetryTests
 {
     [Fact]

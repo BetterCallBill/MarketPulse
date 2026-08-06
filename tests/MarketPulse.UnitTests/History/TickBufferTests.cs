@@ -51,6 +51,7 @@ internal static class MetricHelper
     }
 }
 
+[Collection("MetricCounters")]
 public class TickBufferTests
 {
     private static TickBuffer CreateBuffer(int capacity) =>

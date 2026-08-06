@@ -249,7 +249,13 @@ requeued message comes back with identical headers. Past `RabbitMqOptions.RetryL
 (default 5) the message is nacked without requeue instead, landing on the dead-letter queue
 the topology already provides. Both paths are now visible —
 `marketpulse.notifications.redeliveries` and `marketpulse.notifications.dead_letters` —
-which is what the observability slice was for. A delayed retry queue (redelivering after a
+which is what the observability slice was for. The bound's reach is narrower than "a
+transient failure" implies, though: it operates on `DbUpdateException`-shaped transients,
+the fault the classification was written against, and a connection-open `SqlException` —
+what a fully unreachable database actually throws — currently falls through to the
+catch-all and dead-letters on the first attempt instead of entering the bounded-retry loop.
+No message is lost either way (the DLQ still catches it), but widening the classification
+to cover connection-open failures is not this slice's work; it is slice 11's. A delayed retry queue (redelivering after a
 backoff rather than immediately) was the heavier alternative and is rejected for the same
 reason MassTransit was in decision 3: it is infrastructure this slice would rather author
 plainly than configure. The accepted trade is that retries stay hot — at broker speed, no

@@ -9,6 +9,7 @@ using NSubstitute;
 
 namespace MarketPulse.UnitTests.History;
 
+[Collection("MetricCounters")]
 public class TickPersistenceServiceTests
 {
     private static PriceTick Tick(decimal price) =>

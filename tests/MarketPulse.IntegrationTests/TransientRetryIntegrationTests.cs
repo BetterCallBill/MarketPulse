@@ -19,7 +19,12 @@ public class TransientRetryIntegrationTests(RabbitMqFixture rabbit)
         var options = Options();
 
         await using var connection = await rabbit.ConnectAsync();
-        await using var channel = await connection.CreateChannelAsync();
+        // Publisher confirms on, matching the real channel TransientRetry runs on
+        // (RabbitMqConsumerService.RequiresPublisherConfirms for AlertTriggeredConsumer):
+        // without confirmation tracking, RetryOrDeadLetterAsync's awaited republish never
+        // exercises the confirm-await path it depends on in production.
+        await using var channel = await connection.CreateChannelAsync(new CreateChannelOptions(
+            publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true));
         await RabbitMqTopology.DeclareAsync(channel, options, CancellationToken.None);
         await channel.QueuePurgeAsync(options.NotificationsQueue);
 
@@ -53,7 +58,12 @@ public class TransientRetryIntegrationTests(RabbitMqFixture rabbit)
         var options = Options();
 
         await using var connection = await rabbit.ConnectAsync();
-        await using var channel = await connection.CreateChannelAsync();
+        // Publisher confirms on, matching the real channel TransientRetry runs on
+        // (RabbitMqConsumerService.RequiresPublisherConfirms for AlertTriggeredConsumer):
+        // without confirmation tracking, RetryOrDeadLetterAsync's awaited republish never
+        // exercises the confirm-await path it depends on in production.
+        await using var channel = await connection.CreateChannelAsync(new CreateChannelOptions(
+            publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true));
         await RabbitMqTopology.DeclareAsync(channel, options, CancellationToken.None);
         await channel.QueuePurgeAsync(options.NotificationsQueue);
         await channel.QueuePurgeAsync(options.NotificationsDeadLetterQueue);
