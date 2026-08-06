@@ -30,6 +30,10 @@ public static class TestFactory
     {
         var settings = new Dictionary<string, string?>
         {
+            // The Dapper connection factory is built from the connection string Program.cs reads
+            // off configuration — unlike the DbContextOptions replacement below, it cannot be
+            // swapped after the fact, so the configuration itself must point at the container.
+            ["ConnectionStrings:MarketPulse"] = fixture.ConnectionString,
             ["Auth:LoginRequestsPerMinute"] = UnthrottledAuthRequestsPerMinute
         };
 
