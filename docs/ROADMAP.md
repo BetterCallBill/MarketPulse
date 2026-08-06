@@ -157,9 +157,9 @@ BenchmarkDotNet suite, documented load test to the p95 < 200ms criterion, index 
 *Depends on:* 10 for a realistic environment to measure.
 
 ### 13 · Documentation backfill · phase 6
-The missing ADRs (004 CQRS scope, 005 captive-dependency postmortem, 006 N+1 postmortem —
-007 state architecture was written early, in 4b), `docs/api-style-guide.md`, and the six
-engineering write-ups.
+The missing ADRs (004 CQRS scope, 005 captive-dependency postmortem — 006 N+1 postmortem and
+007 state architecture were written early, in 7a and 4b respectively), `docs/api-style-guide.md`,
+and the six engineering write-ups.
 
 *Depends on:* the slices whose decisions they record. Some ADRs should be written earlier,
 alongside the work — see the register below.
@@ -199,3 +199,8 @@ The README currently describes these as existing. They do not. Each needs buildi
 
 Seven of these are dead links in the README today. Until each is resolved, the README should
 mark them as planned rather than present them as description.
+
+(`docs/sql/`, present since 7a, left the table entirely rather than gaining a "Resolved in
+7a" row: an ADR is a single named decision worth a permanent cross-reference back to the slice
+that wrote it, but `docs/sql/` is just a directory — once it exists, there is nothing left to
+resolve or point back to.)
