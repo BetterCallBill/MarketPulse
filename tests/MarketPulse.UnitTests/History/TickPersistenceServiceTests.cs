@@ -62,17 +62,28 @@ public class TickPersistenceServiceTests
     [Fact]
     public async Task Shutdown_flushes_whatever_remains()
     {
-        var (service, buffer, writer, _) = Create();
+        var options = Options.Create(new HistoryOptions());
+        var buffer = new TickBuffer(options, NullLogger<TickBuffer>.Instance);
+        var writer = Substitute.For<IPriceTickBatchWriter>();
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => writer);
+        var scopes = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+
+        var time = new ExecuteAsyncStartSpy(new FakeTimeProvider());
+        var service = new TickPersistenceService(
+            buffer, scopes, options, time, NullLogger<TickPersistenceService>.Instance);
+
         await service.StartAsync(CancellationToken.None);
 
         // BackgroundService.StartAsync dispatches ExecuteAsync via Task.Run and returns
         // immediately, without waiting for it to actually begin. Under heavy thread-pool
-        // contention that Task.Run can still be queued when StopAsync cancels the linked
-        // token below — and Task.Run's own CancellationToken parameter then skips invoking
-        // ExecuteAsync altogether, so the shutdown flush never happens. Give the loop a
-        // moment to actually start and park on the timer wait before writing and stopping;
-        // this is scheduling slack, not a change to what the test is verifying.
-        await Task.Delay(TimeSpan.FromMilliseconds(100));
+        // contention that Task.Run can still be sitting in the queue when StopAsync cancels
+        // the linked token below — and Task.Run's own CancellationToken parameter then skips
+        // invoking ExecuteAsync altogether, so the shutdown flush never happens. Wait for the
+        // deterministic proof that ExecuteAsync actually started (see ExecuteAsyncStartSpy)
+        // before writing and stopping, instead of gambling on a fixed sleep.
+        await time.ExecuteAsyncStarted.WaitAsync(TimeSpan.FromSeconds(5));
 
         buffer.Writer.TryWrite(Tick(7m));
 
@@ -80,5 +91,34 @@ public class TickPersistenceServiceTests
 
         await writer.Received().WriteAsync(
             Arg.Is<IReadOnlyList<PriceTick>>(b => b!.Count == 1), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// Wraps a TimeProvider to signal the instant ExecuteAsync's PeriodicTimer is
+    /// constructed. PeriodicTimer's constructor calls CreateTimer synchronously — before its
+    /// caller (TickPersistenceService.ExecuteAsync) reaches its first await — so this firing
+    /// is deterministic proof that the BackgroundService's Task.Run-dispatched delegate has
+    /// actually started running on a thread, not just that some time has passed.
+    /// </summary>
+    private sealed class ExecuteAsyncStartSpy(TimeProvider inner) : TimeProvider
+    {
+        private readonly TaskCompletionSource _executeAsyncStarted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task ExecuteAsyncStarted => _executeAsyncStarted.Task;
+
+        public override DateTimeOffset GetUtcNow() => inner.GetUtcNow();
+
+        public override long GetTimestamp() => inner.GetTimestamp();
+
+        public override TimeZoneInfo LocalTimeZone => inner.LocalTimeZone;
+
+        public override long TimestampFrequency => inner.TimestampFrequency;
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            _executeAsyncStarted.TrySetResult();
+            return inner.CreateTimer(callback, state, dueTime, period);
+        }
     }
 }
