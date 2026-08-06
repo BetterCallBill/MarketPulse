@@ -162,6 +162,16 @@ describe('candlesSchema', () => {
       }),
     ).toThrow();
   });
+
+  it('rejects a candle whose timestamp is not a valid datetime', () => {
+    expect(() =>
+      candlesSchema.parse({
+        ticker: 'IVV',
+        interval: '1m',
+        candles: [{ t: 'not-a-date', o: 10, h: 12, l: 9, c: 11 }],
+      }),
+    ).toThrow();
+  });
 });
 
 describe('sparklinesSchema', () => {

@@ -82,7 +82,7 @@ export const transactionSchema = z.object({
 export const candleIntervalSchema = z.enum(['1m', '5m', '1h', '1d']);
 
 export const candleSchema = z.object({
-  t: z.string(),
+  t: z.string().datetime({ offset: true }),
   o: z.number(),
   h: z.number(),
   l: z.number(),
