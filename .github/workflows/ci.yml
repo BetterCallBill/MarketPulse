@@ -45,6 +45,12 @@ jobs:
           file: src/MarketPulse.Api/Dockerfile
           push: false
           tags: marketpulse-api:ci
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/MarketPulse.Alerts/Dockerfile
+          push: false
+          tags: marketpulse-alerts:ci
 
   e2e:
     runs-on: ubuntu-latest
