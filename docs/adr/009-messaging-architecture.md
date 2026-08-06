@@ -238,10 +238,20 @@ instance never won. This is what `IOutbox.Discard` exists for, and it is the one
 outbox pattern's "the caller's single `SaveChanges` is what makes it atomic" contract needs
 a way to say "not that one, after all."
 
-**The requeue loop has no bound until the observability slice adds one.** A transient
-failure (database unreachable, connection reset) on the consumer side is nacked with
-requeue, deliberately, so a redelivered alert is never lost to a database blip. If the
-database stays down, the same message can loop between the consumer and the queue
-indefinitely. Distinguishing a slow-burning transient fault from a permanent one — a
-redelivery counter, or a delayed retry queue — is a real gap, named here rather than glossed
-over, and belongs with the observability slice, where there is somewhere to see it happening.
+**The requeue loop is bounded, as of the observability slice.** A transient failure
+(database unreachable, connection reset) on the consumer side used to be nacked with
+requeue — deliberately, so a redelivered alert was never lost to a database blip, but with
+no limit: if the database stayed down, the same message could loop between the consumer and
+the queue indefinitely. `TransientRetry` replaces the bare requeue with a republish to the
+same queue carrying an incremented `x-retry-count` header, acking the original only once
+the republish has succeeded; a plain nack+requeue could not have counted anything, because a
+requeued message comes back with identical headers. Past `RabbitMqOptions.RetryLimit`
+(default 5) the message is nacked without requeue instead, landing on the dead-letter queue
+the topology already provides. Both paths are now visible —
+`marketpulse.notifications.redeliveries` and `marketpulse.notifications.dead_letters` —
+which is what the observability slice was for. A delayed retry queue (redelivering after a
+backoff rather than immediately) was the heavier alternative and is rejected for the same
+reason MassTransit was in decision 3: it is infrastructure this slice would rather author
+plainly than configure. The accepted trade is that retries stay hot — at broker speed, no
+backoff — until the cap; five fast, free redeliveries costs less than the delay would, and
+the cap is what turns "forever" into "at most `RetryLimit` attempts."
