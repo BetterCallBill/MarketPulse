@@ -22,11 +22,16 @@ test('an alert set in the browser fires on a real tick and lands in the panel', 
 
   // A live price proves the whole realtime path; it is also this test's worker-ready
   // gate — ticks flow through the same broker the worker consumes from.
-  await expect(page.getByLabel('IVV price')).toHaveText(/^\$\d/, { timeout: 15_000 });
+  // Exact match: the ticker's watchlist-row link now carries aria-label
+  // "IVV price history" (slice 7b), which a non-exact getByLabel('IVV price') also
+  // matches as a substring — ambiguous without `exact`.
+  await expect(page.getByLabel('IVV price', { exact: true })).toHaveText(/^\$\d/, {
+    timeout: 15_000,
+  });
 
   // One-shot semantics make this deterministic: an Above rule below the current price
   // fires on the very next tick — no waiting for the random walk to wander anywhere.
-  const priceText = await page.getByLabel('IVV price').textContent();
+  const priceText = await page.getByLabel('IVV price', { exact: true }).textContent();
   const threshold = (Number(priceText!.replace(/[^0-9.]/g, '')) / 2).toFixed(2);
 
   await page.getByLabel('Alert direction for IVV').selectOption('Above');
