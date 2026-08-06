@@ -105,7 +105,9 @@ credentials, in the same honest style as slice 6's rate-limited alert-fire leg.
   two `ecs-service` module instances (API on 8080 behind the ALB; Alerts worker,
   no load balancer), ECR ×2, RDS SQL Server Express, Amazon MQ for RabbitMQ, S3 SPA
   bucket (private) + CloudFront (OAC, dual-origin, `/api/*` + `/hubs/*` behaviors,
-  SPA 403/404 → `/index.html` fallback), task/execution IAM roles (least privilege:
+  SPA route fallback to `/index.html` via a CloudFront Function on the S3 behavior
+  (distribution-wide `custom_error_response` would also rewrite API 403s — found during
+  implementation)), task/execution IAM roles (least privilege:
   secrets read scoped to the two secrets, no wildcard resources), CloudWatch log groups
   (14-day retention), task-definition `secrets` wiring for DB and MQ credentials,
   `Otel__OtlpEndpoint` left unset (no collector in the cloud yet — slice 10 decides the

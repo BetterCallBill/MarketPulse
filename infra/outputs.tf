@@ -22,3 +22,13 @@ output "mq_host" {
   description = "RabbitMQ host (private; AMQPS 5671 from the task SGs only)."
   value       = local.mq_host
 }
+
+output "cloudfront_url" {
+  description = "The application's front door."
+  value       = "https://${aws_cloudfront_distribution.main.domain_name}"
+}
+
+output "spa_bucket" {
+  description = "Upload the dashboard build here (slice 10)."
+  value       = aws_s3_bucket.spa.bucket
+}
