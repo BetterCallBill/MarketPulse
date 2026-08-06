@@ -79,6 +79,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<ITickSink, PersistingTickSink>();
         services.AddScoped<IPriceTickBatchWriter, SqlPriceTickBatchWriter>();
         services.AddHostedService<TickPersistenceService>();
+        services.AddHostedService<TickRetentionService>();
 
         // Typed client + resilience pipeline for the real tick producer. Registering this
         // is inert on its own — nothing resolves YahooQuoteClient until Task 4 adds the
