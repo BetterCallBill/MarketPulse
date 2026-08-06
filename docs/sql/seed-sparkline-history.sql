@@ -1,5 +1,9 @@
 -- Populate a retention-window-scale PriceTicks: 20 seeded tickers × 7 days × 1/minute
--- ≈ 201,600 rows. Idempotent-ish: IGNORE_DUP_KEY absorbs replays on re-run.
+-- ≈ 201,600 rows. NOT idempotent: timestamps are computed from SYSDATETIMEOFFSET() at run
+-- time, so a second run doesn't collide with the first run's rows — it appends another
+-- ~201,600. The PK's IGNORE_DUP_KEY (see the PriceTicks migration) only absorbs an
+-- exact-same-instant (Ticker, TimestampUtc) collision, which this generator practically
+-- never produces run-to-run.
 SET NOCOUNT ON;
 ;WITH n AS (
     SELECT TOP (10080) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1 AS i

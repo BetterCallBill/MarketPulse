@@ -15,19 +15,45 @@ sqlserver`), not a mock.
 | `sparklines-set-based.sql` | The fixed single-query shape (`GetSparklinesAsync`), same statistics capture, for a like-for-like comparison. |
 | `sparklines-before.txt` | Captured output of `sparklines-n-plus-one.sql`. |
 | `sparklines-after.txt` | Captured output of `sparklines-set-based.sql`. |
+| `sparklines-e2e-before.txt` | Raw `curl -w '%{time_total}\n'` output, 20 requests, v1 (N+1) handler. |
+| `sparklines-e2e-after.txt` | Raw `curl -w '%{time_total}\n'` output, 20 requests, set-based (fixed) handler, same database snapshot as the before file. |
 
-Both `.txt` captures were taken back-to-back against the same `PriceTicks` snapshot
-(**404,625 rows** — two runs of the seed script, 20 tickers × 7 days × 1/minute each) so the
-row counts and I/O numbers are directly comparable; capturing them minutes apart, against a
-table whose retention window had moved, was tried first and produced a mismatched row count
-between the two queries (1200 rows in one, 1080 in the other) purely from clock drift — that
-false lead is why both were re-captured in the same sitting.
+Both `.txt` SQL captures were taken back-to-back against the same `PriceTicks` snapshot
+(**404,625 rows** at capture time — see "Data volume" below) so the row counts and I/O
+numbers are directly comparable; capturing them minutes apart, against a table whose
+retention window had moved, was tried first and produced a mismatched row count between the
+two queries (1200 rows in one, 1080 in the other) purely from clock drift — that false lead
+is why both were re-captured in the same sitting.
+
+### Data volume
+
+404,625 rows is **not** two clean runs of the seed script (that would be 403,200 — 2 ×
+201,600). It is 403,200 seeded rows plus ~1,425 rows written by `FakeTickService` (which
+ticks every second for every reference ticker whenever the API process is up) during the
+API sessions used for earlier end-to-end timing attempts before the seed script's own `PRINT`
+reported 404,625. The seed script is not idempotent by design (see its header comment) — a
+second run doesn't collide with the first run's timestamps, it appends another ~201,600
+rows — so the exact total at any given moment depends on how many times it's been run and
+how long the API has been up since. The number that matters for reproducing the SQL
+captures above is "however many rows `seed-sparkline-history.sql`'s own `PRINT` reports
+immediately before you capture," not a fixed constant.
 
 ## What was measured
 
 **SQL Server statistics** — `SET STATISTICS TIME/IO ON` around the two query shapes above,
 against the 404,625-row `PriceTicks` table, 20 tickers, 60-minute window (matching
 `HistoryOptions.SparklineWindowMinutes`'s default).
+
+**Harness divergence, stated up front:** `sparklines-n-plus-one.sql` replays v1's 20
+single-ticker queries as a T-SQL `CURSOR` loop over *one* connection, because that's what's
+expressible in a `.sql` script. The real v1 handler never did this — it opened 20 separate
+ADO.NET connections and issued 20 separate round trips from the .NET process. The cursor's
+own `OPEN`/`FETCH` bookkeeping (materializing and re-reading its result set) is measured
+overhead the real loop never paid, and it shows up in the capture as extra `Tickers` and
+`Worktable` logical reads that have nothing to do with the candle query itself — see the
+corrected reading of those numbers below. `SET STATISTICS IO/TIME` therefore measures
+*query cost* (how expensive is the SQL Server work), not the N+1's *real* cost, which is
+round-trip count. The end-to-end HTTP section is what actually measures the round trips.
 
 **End-to-end HTTP timing** — the real API (`dotnet run --project src/MarketPulse.Api`),
 a freshly registered user, 20 watchlist tickers added via `POST
@@ -46,30 +72,57 @@ regression; it is not reported below because it wasn't measuring the same thing 
 
 ### SQL Server statistics (`STATISTICS TIME`/`IO`, 20 tickers, 404,625 rows in `PriceTicks`)
 
-| | Before (N+1, `sparklines-before.txt`) | After (set-based, `sparklines-after.txt`) |
+**Query cost — the actual candle/sparkline `SELECT`s, excluding cursor harness bookkeeping:**
+
+| | Before (N+1, 20 queries) | After (set-based, 1 query) |
 |---|---|---|
-| Queries issued | 20 (one per ticker, inside a cursor loop) | 1 |
-| Statement batches (`SQL Server Execution Times` blocks) | 69 (cursor open/fetch/close + 20 × query) | 4 |
 | `PriceTicks` logical reads (sum) | 112 | 112 |
 | `PriceTicks` scan count (sum) | 20 | 20 |
-| `Tickers` logical reads (sum) | 42 (scanned once per cursor `FETCH`, 21 times, plus the driving `SELECT`) | 2 (scanned once) |
-| `Worktable` logical reads (sum) | 82 (a `ROW_NUMBER`/spool worktable per iteration) | 0 |
-| **Total logical reads** | **236** | **114** (**52% fewer**) |
-| Elapsed time (sum across all batches) | 150 ms | 25 ms (**6× faster**) |
-| CPU time (sum across all batches) | 161 ms | 35 ms (**4.6× faster**) |
+| `Tickers` logical reads (query itself) | 0 (the real per-ticker query never touches `Tickers`) | 2 (one scan, for the `selectedTickers` CTE) |
+| `Worktable` logical reads (query itself) | 0 | 0 |
+| **Query-cost logical reads total** | **112** | **114** |
 | Rows returned | 1200 (20 tickers × 60 buckets) | 1200 (same) |
 
-`PriceTicks` itself gets scanned 20 times either way — 20 tickers means 20 indexed seeks
-against the clustered `(Ticker, TimestampUtc)` index regardless of whether they run inside
-one query or twenty, so that row is the same in both columns and is *not* where the win
-lives. The win is everything the N+1 shape paid 20 times over that the set-based query pays
-once: the `Tickers` lookup, the per-iteration `ROW_NUMBER` spool (`Worktable`), and — the
-part these numbers under-state — 20 separate query compilations and 20 separate network
-round trips to SQL Server, collapsed to 1. That last part is invisible to `STATISTICS
-IO`/`TIME` (both measure server-side work only) and is exactly what the end-to-end numbers
-below capture instead.
+**Server-side logical reads for the query work are effectively unchanged (112 vs. 114).**
+This is expected, not a wash that undermines the fix: 20 tickers means 20 indexed seeks
+against the clustered `(Ticker, TimestampUtc)` index either way — one query issuing 20 seeks
+internally costs SQL Server about the same as 20 queries issuing one seek each. Reducing
+*that* number was never the fix's mechanism. The two extra `Tickers` reads in the after
+column are the one-time cost of the `selectedTickers` CTE that drives the join; noise at
+this scale.
+
+**Batch cost:**
+
+| | Before | After |
+|---|---|---|
+| Statement batches (`SQL Server Execution Times` blocks) | 69 (cursor `OPEN`/21×`FETCH`/`CLOSE` + 20 × query) | 4 |
+| Ad-hoc parse & compile (one block per whole batch, not per statement) | 144 ms CPU / 144 ms elapsed | 11 ms CPU / 12 ms elapsed |
+| Statement execution time, **excluding** parse & compile (sum) | 17 ms CPU / 6 ms elapsed | 24 ms CPU / 13 ms elapsed |
+
+**Excluding the one-off ad-hoc compile, the set-based query is not faster server-side at
+this data volume — it is slightly slower (13ms/24ms vs. 6ms/17ms).** The compile-time row
+is not a fair before/after comparison either: each script compiles once, as a whole batch,
+the first time SQL Server sees that exact text, so 144ms vs. 12ms says "these are two
+different, unique ad-hoc batches" more than it says anything about the query shapes — it is
+**not** 20 compiles collapsing to 1 (auto-parameterization already reused one cached plan
+across all 20 cursor iterations; the loop only ever compiled its query text once). None of
+this is a knock against the fix; it says the server-side cost of the SQL itself was never
+where the N+1's damage was.
+
+**The N+1's real, measured cost is round-trip count, not query cost: 20 independent
+connections and commands collapsed to 1** — a number `STATISTICS IO`/`TIME` cannot show at
+all, because both measure server-side work only and have no visibility into how many times
+the client opened a connection or sent a command over the wire. That is exactly what the
+end-to-end HTTP numbers below were captured to measure instead. (See "harness divergence"
+above: the cursor script's own bookkeeping — the `Tickers`/`Worktable` reads that appeared
+in an earlier draft of this table attributed to the fix's win — is overhead the *harness*
+paid to fake a multi-connection loop inside one connection; the real C# v1 loop never paid
+it, and it isn't part of either column above.)
 
 ### End-to-end HTTP timing (20 requests, `GET /api/v1/prices/sparklines`, 20-ticker watchlist, same 404,625-row `PriceTicks` table for both runs)
+
+Raw captures: `sparklines-e2e-before.txt`, `sparklines-e2e-after.txt` (one `curl -w
+'%{time_total}\n'` line per request, seconds).
 
 | | Before (N+1) | After (set-based) |
 |---|---|---|
@@ -106,7 +159,13 @@ docker compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -C -S localhost -
 For the end-to-end numbers: run the API, register a user, `POST` 20 tickers to
 `/api/v1/watchlist/items` (keeping the cookie jar and the `X-CSRF-Token` header from
 registration), then loop 20 `curl -s -o /dev/null -w '%{time_total}\n' -b <jar>
-http://localhost:5100/api/v1/prices/sparklines`.
+http://localhost:5100/api/v1/prices/sparklines`. To reproduce the before/after pair fairly
+(same `PriceTicks` snapshot for both), capture the after run first against the fix as it
+exists on disk, then `git stash push -- <the three fix files>` to temporarily restore the v1
+loop, rebuild, capture the before run against the *same* database with no reseed in between,
+and `git stash pop` to restore the fix. Reseeding — or running the API, which lets
+`FakeTickService` add rows — between the two captures invalidates the comparison; see "Data
+volume" above for what that looks like when it goes wrong.
 
 ## Two known deviations from a naive read of the query text
 

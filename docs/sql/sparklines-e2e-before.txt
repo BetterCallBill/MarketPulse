@@ -1,0 +1,26 @@
+# Raw curl -w '%{time_total}\n' output, one line per request (seconds).
+# GET /api/v1/prices/sparklines, 20 sequential requests, 20-ticker watchlist,
+# v1 (N+1) handler, PriceTicks at 404,625 rows (matching sparklines-before.txt's capture).
+# Captured by: dotnet run --project src/MarketPulse.Api (http profile, localhost:5100),
+# register a fresh user, POST 20 tickers to /api/v1/watchlist/items, then loop the GET
+# with the session cookie jar and X-CSRF-Token header attached.
+0.110962
+0.034309
+0.033319
+0.034258
+0.035442
+0.033057
+0.032270
+0.030722
+0.031875
+0.034009
+0.031105
+0.031104
+0.031254
+0.031713
+0.032529
+0.033320
+0.032949
+0.036794
+0.033571
+0.031565

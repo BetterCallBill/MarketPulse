@@ -55,7 +55,8 @@ just the vehicle.
 ## Measured: before and after
 
 Full methodology and raw captures are in `docs/sql/` (`README.md`, `sparklines-before.txt`,
-`sparklines-after.txt`); the numbers here are quoted from those files, not estimated.
+`sparklines-after.txt`, `sparklines-e2e-before.txt`, `sparklines-e2e-after.txt`); the numbers
+here are quoted from those files, not estimated.
 
 **The pin, run against the still-N+1 handler (RED, as required before the fix landed):**
 
@@ -70,23 +71,34 @@ caught by a test for the first time. After the fix, the same test passes with `c
 == 1`, and the whole suite (119 integration tests, 151 unit tests) stays green.
 
 **SQL Server statistics** (`SET STATISTICS TIME/IO ON`, 20 tickers, 404,625-row `PriceTicks`,
-60-minute window — matching `HistoryOptions.SparklineWindowMinutes`'s default):
+60-minute window — matching `HistoryOptions.SparklineWindowMinutes`'s default). The N+1
+column here is a T-SQL `CURSOR` loop over one connection — a harness stand-in for the real
+v1 code's 20 separate ADO.NET connections, which nothing expressible in a `.sql` script can
+reproduce. That divergence matters for reading the numbers correctly, so it's stated before
+them, not after: full detail in `docs/sql/README.md`'s "harness divergence" note.
 
-| | Before (N+1) | After (set-based) |
+| | Before (N+1, 20 queries) | After (set-based, 1 query) |
 |---|---|---|
-| Queries issued | 20 | 1 |
-| Statement batches | 69 | 4 |
-| Total logical reads | 236 | 114 (52% fewer) |
-| Elapsed time (sum) | 150 ms | 25 ms (6× faster) |
-| CPU time (sum) | 161 ms | 35 ms (4.6× faster) |
+| `PriceTicks` logical reads (sum) — the actual query work | 112 | 112 |
+| `Tickers`/`Worktable` logical reads (query itself, excl. cursor bookkeeping) | 0 | 2 |
+| Statement batches | 69 (cursor `OPEN`/21×`FETCH`/`CLOSE` + 20 × query) | 4 |
+| Ad-hoc parse & compile (once per batch, not per statement) | 144 ms | 12 ms |
+| Statement execution time excl. compile (sum) | 6 ms elapsed / 17 ms CPU | 13 ms elapsed / 24 ms CPU |
 
-`PriceTicks` itself is scanned 20 times either way (112 logical reads in both columns) —
-20 tickers means 20 indexed seeks against the clustered `(Ticker, TimestampUtc)` index
-regardless of how many queries carry them. The reduction comes from everything the loop
-paid 20 times over that the set-based query pays once: the `Tickers` table lookup (42
-logical reads → 2), the per-iteration `ROW_NUMBER` spool (82 `Worktable` logical reads → 0),
-and 19 fewer query compilations — none of which `STATISTICS IO`/`TIME` can show directly, but
-all of which show up as the batch-count difference (69 → 4).
+**Server-side logical reads for the query work are effectively unchanged (112 vs. 114), and
+excluding the one-off ad-hoc compile, the set-based query is not faster server-side at this
+data volume — it is slightly slower.** `PriceTicks` is scanned 20 times either way — 20
+tickers means 20 indexed seeks against the clustered `(Ticker, TimestampUtc)` index
+regardless of whether one query issues all 20 or 20 queries issue one each — so SQL Server's
+own cost was never where this fix's value lives. An earlier draft of this ADR attributed the
+"win" to reduced `Tickers`/`Worktable` reads and a large elapsed/CPU-time multiplier; both
+numbers turned out to be artifacts of the cursor harness (its `OPEN`/`FETCH` bookkeeping,
+not the candle query) and of comparing two one-off ad-hoc batch compiles (not 20 compiles
+collapsing to 1 — auto-parameterization already reused one cached plan across all 20 cursor
+iterations). The corrected reading: **the N+1's real, measured cost is round-trip count —
+20 independent connections and commands collapsed to 1** — a number `STATISTICS IO`/`TIME`
+has no visibility into at all, because both measure server-side work only. That is exactly
+what the end-to-end HTTP numbers below measure instead.
 
 **End-to-end HTTP timing** (20 sequential `GET /api/v1/prices/sparklines`, 20-ticker
 watchlist, same 404,625-row `PriceTicks` table for both runs — captured by reverting to the

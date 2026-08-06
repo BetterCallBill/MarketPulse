@@ -1,5 +1,10 @@
--- What GetSparklinesHandler v1 does: N single-ticker candle queries. STATISTICS TIME/IO
--- per query; the plan for one representative iteration captured via SHOWPLAN_TEXT.
+-- What GetSparklinesHandler v1 does: N single-ticker candle queries, replayed here as a
+-- T-SQL CURSOR loop over one connection. That loop is a harness stand-in, not a faithful
+-- replay: the real v1 code opened a separate connection and issued a separate round trip
+-- per ticker, which this single in-server batch cannot reproduce. The cursor's own
+-- OPEN/FETCH bookkeeping is measured harness overhead the real loop never paid — see the
+-- "harness divergence" note in docs/sql/README.md before reading the STATISTICS IO/TIME
+-- output below as if it were the real loop's server-side cost.
 SET STATISTICS TIME ON;
 SET STATISTICS IO ON;
 DECLARE @FromUtc datetimeoffset = DATEADD(MINUTE, -60, SYSDATETIMEOFFSET());
