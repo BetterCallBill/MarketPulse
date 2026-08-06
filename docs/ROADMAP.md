@@ -109,6 +109,13 @@ current scope:
   anyway); the effect is log noise. No slice owns this; it remains recorded here.
 - `BrokerOutageTests` still leaves a durable randomly-named queue and binding per run. The
   broker container is per-run, so it self-cleans; hygiene only, no slice owns this either.
+- `MarketDataResilienceTests.Sustained_429s_open_the_breaker_even_though_none_of_them_are_retried`
+  (slice 6) flakes intermittently — `Assert.Throws<BrokenCircuitException>` sees no throw,
+  a timing race in the breaker's sampling window against `FakeTimeProvider`. Observed
+  repeatedly during slices 6–8 (roughly 1 failure per 3–8 full-suite runs), confirmed on
+  unmodified baselines both times it was investigated; always passes on re-run. No slice
+  owns the fix; recorded here so the next CI red on this test name costs a re-run, not an
+  investigation.
 
 4a's spec also left its manual done-criteria unrehearsed — starting both processes by hand,
 watching a real alert fire, and stopping/restarting the broker to see the outbox flush. A
