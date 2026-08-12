@@ -1,0 +1,96 @@
+using System.Security.Cryptography;
+using System.Text;
+using MarketPulse.Api.Authentication;
+using MarketPulse.Api.Hubs;
+using MarketPulse.Domain.Exceptions;
+
+namespace MarketPulse.Api.Middleware;
+
+/// <summary>
+/// Double-submit cookie CSRF defence: an unsafe request must echo the (JS-readable)
+/// mp_csrf cookie back in a header. A cross-site attacker can cause the browser to send
+/// the cookie but cannot read it to set the header.
+///
+/// SameSite already blocks the common cases — this is defence in depth, not the primary
+/// control. Chosen over the framework's IAntiforgery because that is oriented around MVC
+/// form posts rather than a JSON API.
+/// </summary>
+public sealed class CsrfMiddleware(RequestDelegate next, ILogger<CsrfMiddleware> logger)
+{
+    public const string HeaderName = "X-CSRF-Token";
+
+    private static readonly HashSet<string> SafeMethods =
+        new(StringComparer.OrdinalIgnoreCase) { "GET", "HEAD", "OPTIONS", "TRACE" };
+
+    /// <summary>
+    /// Login and register are exempt: a client cannot hold a CSRF cookie before its first
+    /// successful authentication. Both are rate limited instead.
+    ///
+    /// /hubs/prices and /hubs/notifications are exempt too, for a different reason:
+    /// negotiate is a POST, but neither hub has a client-invoked mutation for a forged
+    /// request to trigger — PriceHub only ever pushes ticks server-to-client, and
+    /// NotificationHub (like it, an empty <c>Hub</c>) only ever pushes notifications the
+    /// same way. Both are cookie-authenticated the same way as everything else (see
+    /// OnMessageReceived), and the browser's WebSocket API cannot attach a custom header to
+    /// the upgrade request even if we wanted one there. This reasoning is per-hub, not a
+    /// blanket exemption for anything under /hubs — a future hub with client-invokable
+    /// methods needs its own path added here only after the same argument is re-checked
+    /// against it.
+    ///
+    /// <see cref="ExemptPaths"/> uses <c>StartsWithSegments</c>, so exempting a hub's path
+    /// exempts its whole path family, including long-polling's client-to-server send
+    /// endpoint — that is only safe because the hub declares no client-invokable methods.
+    /// <see cref="ExemptHubs"/> is the single source of truth for which hub sits behind
+    /// which exempt path, precisely so <c>CsrfMiddlewareTests</c> can assert that invariant
+    /// by reflection instead of by comment.
+    /// </summary>
+    internal static readonly (string Path, Type HubType)[] ExemptHubs =
+    [
+        ("/hubs/prices", typeof(PriceHub)),
+        ("/hubs/notifications", typeof(NotificationHub))
+    ];
+
+    private static readonly string[] ExemptPaths =
+    [
+        "/api/v1/auth/login", "/api/v1/auth/register",
+        .. ExemptHubs.Select(h => h.Path)
+    ];
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        if (SafeMethods.Contains(context.Request.Method)
+            || ExemptPaths.Any(p => context.Request.Path.StartsWithSegments(p)))
+        {
+            await next(context);
+            return;
+        }
+
+        var cookie = context.Request.Cookies[AuthCookies.Csrf];
+        var header = context.Request.Headers[HeaderName].ToString();
+
+        if (string.IsNullOrEmpty(cookie) || string.IsNullOrEmpty(header) || !Matches(cookie, header))
+        {
+            // Neither half of the pair is logged: the nonce is the secret this check rests
+            // on, and ExceptionHandlingMiddleware attaches the correlation id that ties this
+            // line to the response the caller saw.
+            logger.LogWarning(
+                "CSRF validation failed for {Method} {Path}. Cookie present: {HasCookie}, " +
+                "header present: {HasHeader}.",
+                context.Request.Method,
+                context.Request.Path,
+                !string.IsNullOrEmpty(cookie),
+                !string.IsNullOrEmpty(header));
+
+            // Thrown rather than written directly so ExceptionHandlingMiddleware, which sits
+            // above this in the pipeline, produces the same ProblemDetails shape as
+            // everything else.
+            throw new CsrfValidationException();
+        }
+
+        await next(context);
+    }
+
+    private static bool Matches(string cookie, string header) =>
+        CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(cookie), Encoding.UTF8.GetBytes(header));
+}

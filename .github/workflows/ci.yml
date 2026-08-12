@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, test]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore
+      - run: dotnet build --no-restore -c Release
+      - run: dotnet test --no-build -c Release --verbosity normal
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Version comes from package.json#packageManager (pnpm@11.1.1) — specifying
+      # it here too makes action-setup fail with ERR_PNPM_BAD_PM_VERSION.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm --filter @marketpulse/dashboard build
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.15.7'
+      - run: terraform fmt -check -recursive
+        working-directory: infra
+      # -backend=false: validation needs providers, not state or credentials.
+      - run: terraform init -backend=false && terraform validate
+        working-directory: infra/bootstrap
+      - run: terraform init -backend=false && terraform validate
+        working-directory: infra
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/MarketPulse.Api/Dockerfile
+          push: false
+          tags: marketpulse-api:ci
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/MarketPulse.Alerts/Dockerfile
+          push: false
+          tags: marketpulse-alerts:ci
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Local!Dev!Pass123"
+          MSSQL_PID: Developer
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Local!Dev!Pass123' -C -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+          --health-start-period 30s
+      rabbitmq:
+        image: rabbitmq:3-management
+        env:
+          RABBITMQ_DEFAULT_USER: marketpulse
+          RABBITMQ_DEFAULT_PASS: "Local!Dev!Pass123"
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+          --health-start-period 20s
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @marketpulse/e2e exec playwright install --with-deps chromium
+      # The service container starts with an empty SQL Server. Unlike the backend job,
+      # which gets its schema from Testcontainers via SqlServerFixture, this job talks to
+      # a real server that nothing has migrated — so it runs the same command the README
+      # gives a human as step 2. Without it the API boots, answers /health 200 (which is
+      # liveness, not readiness), and then fails every query.
+      - run: dotnet tool restore
+      # `dotnet ef` reads project metadata, so the project needs its assets file. Jobs
+      # share no state, and this one has not restored or built anything yet — the backend
+      # job's restore does not carry over.
+      - run: dotnet restore
+      - run: dotnet ef database update --project src/MarketPulse.Infrastructure
+      - run: pnpm --filter @marketpulse/dashboard build
+      - run: pnpm e2e
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report/
+          retention-days: 7

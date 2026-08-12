@@ -1,0 +1,1573 @@
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 40, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 1, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 1 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 1 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+SQL Server parse and compile time: 
+   CPU time = 144 ms, elapsed time = 144 ms.
+Bucket      Close               
+----------- --------------------
+   13988266              89.5900
+   13988267              89.5800
+   13988268              89.5700
+   13988269              89.5600
+   13988270              89.5500
+   13988271              89.5400
+   13988272              89.5300
+   13988273              89.5200
+   13988274              89.5100
+   13988275              89.5000
+   13988276              89.4900
+   13988277              89.4800
+   13988278              89.4700
+   13988279              89.4600
+   13988280              89.4500
+   13988281              89.4400
+   13988282              89.4300
+   13988283              89.4200
+   13988284              89.4100
+   13988285              89.4000
+   13988286              89.3900
+   13988287              89.3800
+   13988288              89.3700
+   13988289              89.3600
+   13988290              89.3500
+   13988291              89.3400
+   13988292              89.3300
+   13988293              89.3200
+   13988294              89.3100
+   13988295              89.3000
+   13988296              89.2900
+   13988297              89.2800
+   13988298              89.2700
+   13988299              89.2600
+   13988300              89.2500
+   13988301              89.2400
+   13988302              89.2300
+   13988303              89.2200
+   13988304              89.2100
+   13988305              89.2000
+   13988306              89.1900
+   13988307              89.1800
+   13988308              89.1700
+   13988309              89.1600
+   13988310              89.1500
+   13988311              89.1400
+   13988312              89.1300
+   13988313              89.1200
+   13988314              89.1100
+   13988315              89.1000
+   13988316              89.0900
+   13988317             143.2000
+   13988318             148.9600
+   13988319              89.0600
+   13988320              89.0500
+   13988321              89.0400
+   13988322              89.0300
+   13988323              89.0200
+   13988324              89.0100
+   13988325              89.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 6, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 1 ms,  elapsed time = 1 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266             112.5900
+   13988267             112.5800
+   13988268             112.5700
+   13988269             112.5600
+   13988270             112.5500
+   13988271             112.5400
+   13988272             112.5300
+   13988273             112.5200
+   13988274             112.5100
+   13988275             112.5000
+   13988276             112.4900
+   13988277             112.4800
+   13988278             112.4700
+   13988279             112.4600
+   13988280             112.4500
+   13988281             112.4400
+   13988282             112.4300
+   13988283             112.4200
+   13988284             112.4100
+   13988285             112.4000
+   13988286             112.3900
+   13988287             112.3800
+   13988288             112.3700
+   13988289             112.3600
+   13988290             112.3500
+   13988291             112.3400
+   13988292             112.3300
+   13988293             112.3200
+   13988294             112.3100
+   13988295             112.3000
+   13988296             112.2900
+   13988297             112.2800
+   13988298             112.2700
+   13988299             112.2600
+   13988300             112.2500
+   13988301             112.2400
+   13988302             112.2300
+   13988303             112.2200
+   13988304             112.2100
+   13988305             112.2000
+   13988306             112.1900
+   13988307             112.1800
+   13988308             112.1700
+   13988309             112.1600
+   13988310             112.1500
+   13988311             112.1400
+   13988312             112.1300
+   13988313             112.1200
+   13988314             112.1100
+   13988315             112.1000
+   13988316             112.0900
+   13988317              69.4200
+   13988318              66.8600
+   13988319             112.0600
+   13988320             112.0500
+   13988321             112.0400
+   13988322             112.0300
+   13988323             112.0200
+   13988324             112.0100
+   13988325             112.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 6, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 2 ms,  elapsed time = 1 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266              76.5900
+   13988267              76.5800
+   13988268              76.5700
+   13988269              76.5600
+   13988270              76.5500
+   13988271              76.5400
+   13988272              76.5300
+   13988273              76.5200
+   13988274              76.5100
+   13988275              76.5000
+   13988276              76.4900
+   13988277              76.4800
+   13988278              76.4700
+   13988279              76.4600
+   13988280              76.4500
+   13988281              76.4400
+   13988282              76.4300
+   13988283              76.4200
+   13988284              76.4100
+   13988285              76.4000
+   13988286              76.3900
+   13988287              76.3800
+   13988288              76.3700
+   13988289              76.3600
+   13988290              76.3500
+   13988291              76.3400
+   13988292              76.3300
+   13988293              76.3200
+   13988294              76.3100
+   13988295              76.3000
+   13988296              76.2900
+   13988297              76.2800
+   13988298              76.2700
+   13988299              76.2600
+   13988300              76.2500
+   13988301              76.2400
+   13988302              76.2300
+   13988303              76.2200
+   13988304              76.2100
+   13988305              76.2000
+   13988306              76.1900
+   13988307              76.1800
+   13988308              76.1700
+   13988309              76.1600
+   13988310              76.1500
+   13988311              76.1400
+   13988312              76.1300
+   13988313              76.1200
+   13988314              76.1100
+   13988315              76.1000
+   13988316              76.0900
+   13988317              11.8600
+   13988318              11.4900
+   13988319              76.0600
+   13988320              76.0500
+   13988321              76.0400
+   13988322              76.0300
+   13988323              76.0200
+   13988324              76.0100
+   13988325              76.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 5, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 4 ms,  elapsed time = 2 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266             136.5900
+   13988267             136.5800
+   13988268             136.5700
+   13988269             136.5600
+   13988270             136.5500
+   13988271             136.5400
+   13988272             136.5300
+   13988273             136.5200
+   13988274             136.5100
+   13988275             136.5000
+   13988276             136.4900
+   13988277             136.4800
+   13988278             136.4700
+   13988279             136.4600
+   13988280             136.4500
+   13988281             136.4400
+   13988282             136.4300
+   13988283             136.4200
+   13988284             136.4100
+   13988285             136.4000
+   13988286             136.3900
+   13988287             136.3800
+   13988288             136.3700
+   13988289             136.3600
+   13988290             136.3500
+   13988291             136.3400
+   13988292             136.3300
+   13988293             136.3200
+   13988294             136.3100
+   13988295             136.3000
+   13988296             136.2900
+   13988297             136.2800
+   13988298             136.2700
+   13988299             136.2600
+   13988300             136.2500
+   13988301             136.2400
+   13988302             136.2300
+   13988303             136.2200
+   13988304             136.2100
+   13988305             136.2000
+   13988306             136.1900
+   13988307             136.1800
+   13988308             136.1700
+   13988309             136.1600
+   13988310             136.1500
+   13988311             136.1400
+   13988312             136.1300
+   13988313             136.1200
+   13988314             136.1100
+   13988315             136.1000
+   13988316             136.0900
+   13988317              14.6600
+   13988318              14.4700
+   13988319             136.0600
+   13988320             136.0500
+   13988321             136.0400
+   13988322             136.0300
+   13988323             136.0200
+   13988324             136.0100
+   13988325             136.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 6, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266             120.5900
+   13988267             120.5800
+   13988268             120.5700
+   13988269             120.5600
+   13988270             120.5500
+   13988271             120.5400
+   13988272             120.5300
+   13988273             120.5200
+   13988274             120.5100
+   13988275             120.5000
+   13988276             120.4900
+   13988277             120.4800
+   13988278             120.4700
+   13988279             120.4600
+   13988280             120.4500
+   13988281             120.4400
+   13988282             120.4300
+   13988283             120.4200
+   13988284             120.4100
+   13988285             120.4000
+   13988286             120.3900
+   13988287             120.3800
+   13988288             120.3700
+   13988289             120.3600
+   13988290             120.3500
+   13988291             120.3400
+   13988292             120.3300
+   13988293             120.3200
+   13988294             120.3100
+   13988295             120.3000
+   13988296             120.2900
+   13988297             120.2800
+   13988298             120.2700
+   13988299             120.2600
+   13988300             120.2500
+   13988301             120.2400
+   13988302             120.2300
+   13988303             120.2200
+   13988304             120.2100
+   13988305             120.2000
+   13988306             120.1900
+   13988307             120.1800
+   13988308             120.1700
+   13988309             120.1600
+   13988310             120.1500
+   13988311             120.1400
+   13988312             120.1300
+   13988313             120.1200
+   13988314             120.1100
+   13988315             120.1000
+   13988316             120.0900
+   13988317              26.9200
+   13988318              25.7800
+   13988319             120.0600
+   13988320             120.0500
+   13988321             120.0400
+   13988322             120.0300
+   13988323             120.0200
+   13988324             120.0100
+   13988325             120.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 6, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266             115.5900
+   13988267             115.5800
+   13988268             115.5700
+   13988269             115.5600
+   13988270             115.5500
+   13988271             115.5400
+   13988272             115.5300
+   13988273             115.5200
+   13988274             115.5100
+   13988275             115.5000
+   13988276             115.4900
+   13988277             115.4800
+   13988278             115.4700
+   13988279             115.4600
+   13988280             115.4500
+   13988281             115.4400
+   13988282             115.4300
+   13988283             115.4200
+   13988284             115.4100
+   13988285             115.4000
+   13988286             115.3900
+   13988287             115.3800
+   13988288             115.3700
+   13988289             115.3600
+   13988290             115.3500
+   13988291             115.3400
+   13988292             115.3300
+   13988293             115.3200
+   13988294             115.3100
+   13988295             115.3000
+   13988296             115.2900
+   13988297             115.2800
+   13988298             115.2700
+   13988299             115.2600
+   13988300             115.2500
+   13988301             115.2400
+   13988302             115.2300
+   13988303             115.2200
+   13988304             115.2100
+   13988305             115.2000
+   13988306             115.1900
+   13988307             115.1800
+   13988308             115.1700
+   13988309             115.1600
+   13988310             115.1500
+   13988311             115.1400
+   13988312             115.1300
+   13988313             115.1200
+   13988314             115.1100
+   13988315             115.1000
+   13988316             115.0900
+   13988317              32.1300
+   13988318              32.0200
+   13988319             115.0600
+   13988320             115.0500
+   13988321             115.0400
+   13988322             115.0300
+   13988323             115.0200
+   13988324             115.0100
+   13988325             115.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 5, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266              92.5900
+   13988267              92.5800
+   13988268              92.5700
+   13988269              92.5600
+   13988270              92.5500
+   13988271              92.5400
+   13988272              92.5300
+   13988273              92.5200
+   13988274              92.5100
+   13988275              92.5000
+   13988276              92.4900
+   13988277              92.4800
+   13988278              92.4700
+   13988279              92.4600
+   13988280              92.4500
+   13988281              92.4400
+   13988282              92.4300
+   13988283              92.4200
+   13988284              92.4100
+   13988285              92.4000
+   13988286              92.3900
+   13988287              92.3800
+   13988288              92.3700
+   13988289              92.3600
+   13988290              92.3500
+   13988291              92.3400
+   13988292              92.3300
+   13988293              92.3200
+   13988294              92.3100
+   13988295              92.3000
+   13988296              92.2900
+   13988297              92.2800
+   13988298              92.2700
+   13988299              92.2600
+   13988300              92.2500
+   13988301              92.2400
+   13988302              92.2300
+   13988303              92.2200
+   13988304              92.2100
+   13988305              92.2000
+   13988306              92.1900
+   13988307              92.1800
+   13988308              92.1700
+   13988309              92.1600
+   13988310              92.1500
+   13988311              92.1400
+   13988312              92.1300
+   13988313              92.1200
+   13988314              92.1100
+   13988315              92.1000
+   13988316              92.0900
+   13988317              12.3900
+   13988318              11.8600
+   13988319              92.0600
+   13988320              92.0500
+   13988321              92.0400
+   13988322              92.0300
+   13988323              92.0200
+   13988324              92.0100
+   13988325              92.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 6, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266             143.5900
+   13988267             143.5800
+   13988268             143.5700
+   13988269             143.5600
+   13988270             143.5500
+   13988271             143.5400
+   13988272             143.5300
+   13988273             143.5200
+   13988274             143.5100
+   13988275             143.5000
+   13988276             143.4900
+   13988277             143.4800
+   13988278             143.4700
+   13988279             143.4600
+   13988280             143.4500
+   13988281             143.4400
+   13988282             143.4300
+   13988283             143.4200
+   13988284             143.4100
+   13988285             143.4000
+   13988286             143.3900
+   13988287             143.3800
+   13988288             143.3700
+   13988289             143.3600
+   13988290             143.3500
+   13988291             143.3400
+   13988292             143.3300
+   13988293             143.3200
+   13988294             143.3100
+   13988295             143.3000
+   13988296             143.2900
+   13988297             143.2800
+   13988298             143.2700
+   13988299             143.2600
+   13988300             143.2500
+   13988301             143.2400
+   13988302             143.2300
+   13988303             143.2200
+   13988304             143.2100
+   13988305             143.2000
+   13988306             143.1900
+   13988307             143.1800
+   13988308             143.1700
+   13988309             143.1600
+   13988310             143.1500
+   13988311             143.1400
+   13988312             143.1300
+   13988313             143.1200
+   13988314             143.1100
+   13988315             143.1000
+   13988316             143.0900
+   13988317              47.0200
+   13988318              47.8800
+   13988319             143.0600
+   13988320             143.0500
+   13988321             143.0400
+   13988322             143.0300
+   13988323             143.0200
+   13988324             143.0100
+   13988325             143.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 6, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266             121.5900
+   13988267             121.5800
+   13988268             121.5700
+   13988269             121.5600
+   13988270             121.5500
+   13988271             121.5400
+   13988272             121.5300
+   13988273             121.5200
+   13988274             121.5100
+   13988275             121.5000
+   13988276             121.4900
+   13988277             121.4800
+   13988278             121.4700
+   13988279             121.4600
+   13988280             121.4500
+   13988281             121.4400
+   13988282             121.4300
+   13988283             121.4200
+   13988284             121.4100
+   13988285             121.4000
+   13988286             121.3900
+   13988287             121.3800
+   13988288             121.3700
+   13988289             121.3600
+   13988290             121.3500
+   13988291             121.3400
+   13988292             121.3300
+   13988293             121.3200
+   13988294             121.3100
+   13988295             121.3000
+   13988296             121.2900
+   13988297             121.2800
+   13988298             121.2700
+   13988299             121.2600
+   13988300             121.2500
+   13988301             121.2400
+   13988302             121.2300
+   13988303             121.2200
+   13988304             121.2100
+   13988305             121.2000
+   13988306             121.1900
+   13988307             121.1800
+   13988308             121.1700
+   13988309             121.1600
+   13988310             121.1500
+   13988311             121.1400
+   13988312             121.1300
+   13988313             121.1200
+   13988314             121.1100
+   13988315             121.1000
+   13988316             121.0900
+   13988317             140.3200
+   13988318             132.2000
+   13988319             121.0600
+   13988320             121.0500
+   13988321             121.0400
+   13988322             121.0300
+   13988323             121.0200
+   13988324             121.0100
+   13988325             121.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 6, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266             144.5900
+   13988267             144.5800
+   13988268             144.5700
+   13988269             144.5600
+   13988270             144.5500
+   13988271             144.5400
+   13988272             144.5300
+   13988273             144.5200
+   13988274             144.5100
+   13988275             144.5000
+   13988276             144.4900
+   13988277             144.4800
+   13988278             144.4700
+   13988279             144.4600
+   13988280             144.4500
+   13988281             144.4400
+   13988282             144.4300
+   13988283             144.4200
+   13988284             144.4100
+   13988285             144.4000
+   13988286             144.3900
+   13988287             144.3800
+   13988288             144.3700
+   13988289             144.3600
+   13988290             144.3500
+   13988291             144.3400
+   13988292             144.3300
+   13988293             144.3200
+   13988294             144.3100
+   13988295             144.3000
+   13988296             144.2900
+   13988297             144.2800
+   13988298             144.2700
+   13988299             144.2600
+   13988300             144.2500
+   13988301             144.2400
+   13988302             144.2300
+   13988303             144.2200
+   13988304             144.2100
+   13988305             144.2000
+   13988306             144.1900
+   13988307             144.1800
+   13988308             144.1700
+   13988309             144.1600
+   13988310             144.1500
+   13988311             144.1400
+   13988312             144.1300
+   13988313             144.1200
+   13988314             144.1100
+   13988315             144.1000
+   13988316             144.0900
+   13988317              33.9500
+   13988318              35.7400
+   13988319             144.0600
+   13988320             144.0500
+   13988321             144.0400
+   13988322             144.0300
+   13988323             144.0200
+   13988324             144.0100
+   13988325             144.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 6, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 1 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266              52.5900
+   13988267              52.5800
+   13988268              52.5700
+   13988269              52.5600
+   13988270              52.5500
+   13988271              52.5400
+   13988272              52.5300
+   13988273              52.5200
+   13988274              52.5100
+   13988275              52.5000
+   13988276              52.4900
+   13988277              52.4800
+   13988278              52.4700
+   13988279              52.4600
+   13988280              52.4500
+   13988281              52.4400
+   13988282              52.4300
+   13988283              52.4200
+   13988284              52.4100
+   13988285              52.4000
+   13988286              52.3900
+   13988287              52.3800
+   13988288              52.3700
+   13988289              52.3600
+   13988290              52.3500
+   13988291              52.3400
+   13988292              52.3300
+   13988293              52.3200
+   13988294              52.3100
+   13988295              52.3000
+   13988296              52.2900
+   13988297              52.2800
+   13988298              52.2700
+   13988299              52.2600
+   13988300              52.2500
+   13988301              52.2400
+   13988302              52.2300
+   13988303              52.2200
+   13988304              52.2100
+   13988305              52.2000
+   13988306              52.1900
+   13988307              52.1800
+   13988308              52.1700
+   13988309              52.1600
+   13988310              52.1500
+   13988311              52.1400
+   13988312              52.1300
+   13988313              52.1200
+   13988314              52.1100
+   13988315              52.1000
+   13988316              52.0900
+   13988317              62.5600
+   13988318              61.4900
+   13988319              52.0600
+   13988320              52.0500
+   13988321              52.0400
+   13988322              52.0300
+   13988323              52.0200
+   13988324              52.0100
+   13988325              52.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 6, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 1 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266             103.5900
+   13988267             103.5800
+   13988268             103.5700
+   13988269             103.5600
+   13988270             103.5500
+   13988271             103.5400
+   13988272             103.5300
+   13988273             103.5200
+   13988274             103.5100
+   13988275             103.5000
+   13988276             103.4900
+   13988277             103.4800
+   13988278             103.4700
+   13988279             103.4600
+   13988280             103.4500
+   13988281             103.4400
+   13988282             103.4300
+   13988283             103.4200
+   13988284             103.4100
+   13988285             103.4000
+   13988286             103.3900
+   13988287             103.3800
+   13988288             103.3700
+   13988289             103.3600
+   13988290             103.3500
+   13988291             103.3400
+   13988292             103.3300
+   13988293             103.3200
+   13988294             103.3100
+   13988295             103.3000
+   13988296             103.2900
+   13988297             103.2800
+   13988298             103.2700
+   13988299             103.2600
+   13988300             103.2500
+   13988301             103.2400
+   13988302             103.2300
+   13988303             103.2200
+   13988304             103.2100
+   13988305             103.2000
+   13988306             103.1900
+   13988307             103.1800
+   13988308             103.1700
+   13988309             103.1600
+   13988310             103.1500
+   13988311             103.1400
+   13988312             103.1300
+   13988313             103.1200
+   13988314             103.1100
+   13988315             103.1000
+   13988316             103.0900
+   13988317             119.7500
+   13988318             121.6800
+   13988319             103.0600
+   13988320             103.0500
+   13988321             103.0400
+   13988322             103.0300
+   13988323             103.0200
+   13988324             103.0100
+   13988325             103.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 5, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 1 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266             139.5900
+   13988267             139.5800
+   13988268             139.5700
+   13988269             139.5600
+   13988270             139.5500
+   13988271             139.5400
+   13988272             139.5300
+   13988273             139.5200
+   13988274             139.5100
+   13988275             139.5000
+   13988276             139.4900
+   13988277             139.4800
+   13988278             139.4700
+   13988279             139.4600
+   13988280             139.4500
+   13988281             139.4400
+   13988282             139.4300
+   13988283             139.4200
+   13988284             139.4100
+   13988285             139.4000
+   13988286             139.3900
+   13988287             139.3800
+   13988288             139.3700
+   13988289             139.3600
+   13988290             139.3500
+   13988291             139.3400
+   13988292             139.3300
+   13988293             139.3200
+   13988294             139.3100
+   13988295             139.3000
+   13988296             139.2900
+   13988297             139.2800
+   13988298             139.2700
+   13988299             139.2600
+   13988300             139.2500
+   13988301             139.2400
+   13988302             139.2300
+   13988303             139.2200
+   13988304             139.2100
+   13988305             139.2000
+   13988306             139.1900
+   13988307             139.1800
+   13988308             139.1700
+   13988309             139.1600
+   13988310             139.1500
+   13988311             139.1400
+   13988312             139.1300
+   13988313             139.1200
+   13988314             139.1100
+   13988315             139.1000
+   13988316             139.0900
+   13988317              52.3700
+   13988318              54.3200
+   13988319             139.0600
+   13988320             139.0500
+   13988321             139.0400
+   13988322             139.0300
+   13988323             139.0200
+   13988324             139.0100
+   13988325             139.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 5, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266              72.5900
+   13988267              72.5800
+   13988268              72.5700
+   13988269              72.5600
+   13988270              72.5500
+   13988271              72.5400
+   13988272              72.5300
+   13988273              72.5200
+   13988274              72.5100
+   13988275              72.5000
+   13988276              72.4900
+   13988277              72.4800
+   13988278              72.4700
+   13988279              72.4600
+   13988280              72.4500
+   13988281              72.4400
+   13988282              72.4300
+   13988283              72.4200
+   13988284              72.4100
+   13988285              72.4000
+   13988286              72.3900
+   13988287              72.3800
+   13988288              72.3700
+   13988289              72.3600
+   13988290              72.3500
+   13988291              72.3400
+   13988292              72.3300
+   13988293              72.3200
+   13988294              72.3100
+   13988295              72.3000
+   13988296              72.2900
+   13988297              72.2800
+   13988298              72.2700
+   13988299              72.2600
+   13988300              72.2500
+   13988301              72.2400
+   13988302              72.2300
+   13988303              72.2200
+   13988304              72.2100
+   13988305              72.2000
+   13988306              72.1900
+   13988307              72.1800
+   13988308              72.1700
+   13988309              72.1600
+   13988310              72.1500
+   13988311              72.1400
+   13988312              72.1300
+   13988313              72.1200
+   13988314              72.1100
+   13988315              72.1000
+   13988316              72.0900
+   13988317              48.8700
+   13988318              52.9400
+   13988319              72.0600
+   13988320              72.0500
+   13988321              72.0400
+   13988322              72.0300
+   13988323              72.0200
+   13988324              72.0100
+   13988325              72.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 6, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 1 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266              72.5900
+   13988267              72.5800
+   13988268              72.5700
+   13988269              72.5600
+   13988270              72.5500
+   13988271              72.5400
+   13988272              72.5300
+   13988273              72.5200
+   13988274              72.5100
+   13988275              72.5000
+   13988276              72.4900
+   13988277              72.4800
+   13988278              72.4700
+   13988279              72.4600
+   13988280              72.4500
+   13988281              72.4400
+   13988282              72.4300
+   13988283              72.4200
+   13988284              72.4100
+   13988285              72.4000
+   13988286              72.3900
+   13988287              72.3800
+   13988288              72.3700
+   13988289              72.3600
+   13988290              72.3500
+   13988291              72.3400
+   13988292              72.3300
+   13988293              72.3200
+   13988294              72.3100
+   13988295              72.3000
+   13988296              72.2900
+   13988297              72.2800
+   13988298              72.2700
+   13988299              72.2600
+   13988300              72.2500
+   13988301              72.2400
+   13988302              72.2300
+   13988303              72.2200
+   13988304              72.2100
+   13988305              72.2000
+   13988306              72.1900
+   13988307              72.1800
+   13988308              72.1700
+   13988309              72.1600
+   13988310              72.1500
+   13988311              72.1400
+   13988312              72.1300
+   13988313              72.1200
+   13988314              72.1100
+   13988315              72.1000
+   13988316              72.0900
+   13988317              20.9200
+   13988318              21.6200
+   13988319              72.0600
+   13988320              72.0500
+   13988321              72.0400
+   13988322              72.0300
+   13988323              72.0200
+   13988324              72.0100
+   13988325              72.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 6, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 1 ms,  elapsed time = 2 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266             147.5900
+   13988267             147.5800
+   13988268             147.5700
+   13988269             147.5600
+   13988270             147.5500
+   13988271             147.5400
+   13988272             147.5300
+   13988273             147.5200
+   13988274             147.5100
+   13988275             147.5000
+   13988276             147.4900
+   13988277             147.4800
+   13988278             147.4700
+   13988279             147.4600
+   13988280             147.4500
+   13988281             147.4400
+   13988282             147.4300
+   13988283             147.4200
+   13988284             147.4100
+   13988285             147.4000
+   13988286             147.3900
+   13988287             147.3800
+   13988288             147.3700
+   13988289             147.3600
+   13988290             147.3500
+   13988291             147.3400
+   13988292             147.3300
+   13988293             147.3200
+   13988294             147.3100
+   13988295             147.3000
+   13988296             147.2900
+   13988297             147.2800
+   13988298             147.2700
+   13988299             147.2600
+   13988300             147.2500
+   13988301             147.2400
+   13988302             147.2300
+   13988303             147.2200
+   13988304             147.2100
+   13988305             147.2000
+   13988306             147.1900
+   13988307             147.1800
+   13988308             147.1700
+   13988309             147.1600
+   13988310             147.1500
+   13988311             147.1400
+   13988312             147.1300
+   13988313             147.1200
+   13988314             147.1100
+   13988315             147.1000
+   13988316             147.0900
+   13988317              13.7700
+   13988318              14.3100
+   13988319             147.0600
+   13988320             147.0500
+   13988321             147.0400
+   13988322             147.0300
+   13988323             147.0200
+   13988324             147.0100
+   13988325             147.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 6, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 2 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266              92.5900
+   13988267              92.5800
+   13988268              92.5700
+   13988269              92.5600
+   13988270              92.5500
+   13988271              92.5400
+   13988272              92.5300
+   13988273              92.5200
+   13988274              92.5100
+   13988275              92.5000
+   13988276              92.4900
+   13988277              92.4800
+   13988278              92.4700
+   13988279              92.4600
+   13988280              92.4500
+   13988281              92.4400
+   13988282              92.4300
+   13988283              92.4200
+   13988284              92.4100
+   13988285              92.4000
+   13988286              92.3900
+   13988287              92.3800
+   13988288              92.3700
+   13988289              92.3600
+   13988290              92.3500
+   13988291              92.3400
+   13988292              92.3300
+   13988293              92.3200
+   13988294              92.3100
+   13988295              92.3000
+   13988296              92.2900
+   13988297              92.2800
+   13988298              92.2700
+   13988299              92.2600
+   13988300              92.2500
+   13988301              92.2400
+   13988302              92.2300
+   13988303              92.2200
+   13988304              92.2100
+   13988305              92.2000
+   13988306              92.1900
+   13988307              92.1800
+   13988308              92.1700
+   13988309              92.1600
+   13988310              92.1500
+   13988311              92.1400
+   13988312              92.1300
+   13988313              92.1200
+   13988314              92.1100
+   13988315              92.1000
+   13988316              92.0900
+   13988317              75.4400
+   13988318              69.1200
+   13988319              92.0600
+   13988320              92.0500
+   13988321              92.0400
+   13988322              92.0300
+   13988323              92.0200
+   13988324              92.0100
+   13988325              92.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 5, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266             135.5900
+   13988267             135.5800
+   13988268             135.5700
+   13988269             135.5600
+   13988270             135.5500
+   13988271             135.5400
+   13988272             135.5300
+   13988273             135.5200
+   13988274             135.5100
+   13988275             135.5000
+   13988276             135.4900
+   13988277             135.4800
+   13988278             135.4700
+   13988279             135.4600
+   13988280             135.4500
+   13988281             135.4400
+   13988282             135.4300
+   13988283             135.4200
+   13988284             135.4100
+   13988285             135.4000
+   13988286             135.3900
+   13988287             135.3800
+   13988288             135.3700
+   13988289             135.3600
+   13988290             135.3500
+   13988291             135.3400
+   13988292             135.3300
+   13988293             135.3200
+   13988294             135.3100
+   13988295             135.3000
+   13988296             135.2900
+   13988297             135.2800
+   13988298             135.2700
+   13988299             135.2600
+   13988300             135.2500
+   13988301             135.2400
+   13988302             135.2300
+   13988303             135.2200
+   13988304             135.2100
+   13988305             135.2000
+   13988306             135.1900
+   13988307             135.1800
+   13988308             135.1700
+   13988309             135.1600
+   13988310             135.1500
+   13988311             135.1400
+   13988312             135.1300
+   13988313             135.1200
+   13988314             135.1100
+   13988315             135.1000
+   13988316             135.0900
+   13988317              29.4700
+   13988318              27.5500
+   13988319             135.0600
+   13988320             135.0500
+   13988321             135.0400
+   13988322             135.0300
+   13988323             135.0200
+   13988324             135.0100
+   13988325             135.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 5, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266              55.5900
+   13988267              55.5800
+   13988268              55.5700
+   13988269              55.5600
+   13988270              55.5500
+   13988271              55.5400
+   13988272              55.5300
+   13988273              55.5200
+   13988274              55.5100
+   13988275              55.5000
+   13988276              55.4900
+   13988277              55.4800
+   13988278              55.4700
+   13988279              55.4600
+   13988280              55.4500
+   13988281              55.4400
+   13988282              55.4300
+   13988283              55.4200
+   13988284              55.4100
+   13988285              55.4000
+   13988286              55.3900
+   13988287              55.3800
+   13988288              55.3700
+   13988289              55.3600
+   13988290              55.3500
+   13988291              55.3400
+   13988292              55.3300
+   13988293              55.3200
+   13988294              55.3100
+   13988295              55.3000
+   13988296              55.2900
+   13988297              55.2800
+   13988298              55.2700
+   13988299              55.2600
+   13988300              55.2500
+   13988301              55.2400
+   13988302              55.2300
+   13988303              55.2200
+   13988304              55.2100
+   13988305              55.2000
+   13988306              55.1900
+   13988307              55.1800
+   13988308              55.1700
+   13988309              55.1600
+   13988310              55.1500
+   13988311              55.1400
+   13988312              55.1300
+   13988313              55.1200
+   13988314              55.1100
+   13988315              55.1000
+   13988316              55.0900
+   13988317              44.5400
+   13988318              41.7000
+   13988319              55.0600
+   13988320              55.0500
+   13988321              55.0400
+   13988322              55.0300
+   13988323              55.0200
+   13988324              55.0100
+   13988325              55.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 5, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 1 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Bucket      Close               
+----------- --------------------
+   13988266             124.5900
+   13988267             124.5800
+   13988268             124.5700
+   13988269             124.5600
+   13988270             124.5500
+   13988271             124.5400
+   13988272             124.5300
+   13988273             124.5200
+   13988274             124.5100
+   13988275             124.5000
+   13988276             124.4900
+   13988277             124.4800
+   13988278             124.4700
+   13988279             124.4600
+   13988280             124.4500
+   13988281             124.4400
+   13988282             124.4300
+   13988283             124.4200
+   13988284             124.4100
+   13988285             124.4000
+   13988286             124.3900
+   13988287             124.3800
+   13988288             124.3700
+   13988289             124.3600
+   13988290             124.3500
+   13988291             124.3400
+   13988292             124.3300
+   13988293             124.3200
+   13988294             124.3100
+   13988295             124.3000
+   13988296             124.2900
+   13988297             124.2800
+   13988298             124.2700
+   13988299             124.2600
+   13988300             124.2500
+   13988301             124.2400
+   13988302             124.2300
+   13988303             124.2200
+   13988304             124.2100
+   13988305             124.2000
+   13988306             124.1900
+   13988307             124.1800
+   13988308             124.1700
+   13988309             124.1600
+   13988310             124.1500
+   13988311             124.1400
+   13988312             124.1300
+   13988313             124.1200
+   13988314             124.1100
+   13988315             124.1000
+   13988316             124.0900
+   13988317              89.1400
+   13988318              87.6900
+   13988319             124.0600
+   13988320             124.0500
+   13988321             124.0400
+   13988322             124.0300
+   13988323             124.0200
+   13988324             124.0100
+   13988325             124.0000
+
+(60 rows affected)
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'PriceTicks'. Scan count 1, logical reads 5, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+Table 'Worktable'. Scan count 0, logical reads 2, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+Table 'Tickers'. Scan count 0, logical reads 0, physical reads 0, page server reads 0, read-ahead reads 0, page server read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob page server reads 0, lob read-ahead reads 0, lob page server read-ahead reads 0.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.

@@ -1,0 +1,92 @@
+using FluentValidation;
+using MarketPulse.Domain.Exceptions;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+
+namespace MarketPulse.Api.Middleware;
+
+public sealed class ExceptionHandlingMiddleware(
+    RequestDelegate next,
+    ILogger<ExceptionHandlingMiddleware> logger)
+{
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await next(context);
+        }
+        catch (DomainException ex)
+        {
+            if (ex is AccountLockedException locked && !context.Response.HasStarted)
+            {
+                context.Response.Headers.RetryAfter =
+                    ((int)Math.Ceiling(locked.RetryAfter.TotalSeconds)).ToString();
+            }
+
+            await WriteAsync(context, ex.StatusCode, ex.ErrorCode, ex.Message);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Two writes raced the same portfolio (or rule) and this one lost. The client
+            // re-reads and retries; its sell may now legitimately fail validation instead.
+            await WriteAsync(context, StatusCodes.Status409Conflict,
+                "concurrent-update", "The resource was modified concurrently. Retry.");
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            // Two racing first-ever trades for the same user both take the implicit
+            // portfolio-creation path (no Portfolio row yet, no RowVersion to guard it);
+            // the loser hits IX_Portfolios_UserId's unique index rather than a
+            // concurrency-token mismatch, but the remedy is identical: retry, and the
+            // portfolio the winner already created will be found instead.
+            await WriteAsync(context, StatusCodes.Status409Conflict,
+                "concurrent-update", "The resource was modified concurrently. Retry.");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // ICurrentUser throws this when no authenticated principal is on the request.
+            // Slice 1 let it fall through to a 500; it is a 401.
+            await WriteAsync(context, StatusCodes.Status401Unauthorized,
+                "unauthenticated", "Authentication is required.");
+        }
+        catch (ValidationException ex)
+        {
+            var code = ex.Errors.FirstOrDefault()?.ErrorCode ?? "validation-failed";
+            var detail = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+            await WriteAsync(context, StatusCodes.Status400BadRequest, code, detail);
+        }
+        catch (Exception ex)
+        {
+            var correlationId = CorrelationId(context);
+            logger.LogError(ex, "Unhandled exception. CorrelationId={CorrelationId}", correlationId);
+            await WriteAsync(context, StatusCodes.Status500InternalServerError,
+                "internal-error", "An unexpected error occurred.");
+        }
+    }
+
+    private static string CorrelationId(HttpContext context) =>
+        context.Items[CorrelationIdMiddleware.HeaderName]?.ToString() ?? "unknown";
+
+    private static async Task WriteAsync(
+        HttpContext context, int status, string errorCode, string detail)
+    {
+        if (context.Response.HasStarted)
+        {
+            return;
+        }
+
+        var problem = new ProblemDetails
+        {
+            Status = status,
+            Title = errorCode,
+            Type = $"https://marketpulse.local/errors/{errorCode}",
+            Detail = detail
+        };
+        problem.Extensions["correlationId"] = CorrelationId(context);
+
+        context.Response.StatusCode = status;
+        await context.Response.WriteAsJsonAsync(
+            problem, options: null, contentType: "application/problem+json");
+    }
+}

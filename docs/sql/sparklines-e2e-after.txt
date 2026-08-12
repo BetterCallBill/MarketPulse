@@ -1,0 +1,26 @@
+# Raw curl -w '%{time_total}\n' output, one line per request (seconds).
+# GET /api/v1/prices/sparklines, 20 sequential requests, 20-ticker watchlist,
+# set-based (fixed) handler, same PriceTicks snapshot as sparklines-e2e-before.txt —
+# no reseed between the two runs. Captured immediately after sparklines-e2e-before.txt by
+# `git stash pop`-ing the fix back in, rebuilding, and re-running the identical loop
+# (fresh user, fresh cookie jar, same 20 tickers) against the same database.
+0.089910
+0.025452
+0.023905
+0.023499
+0.022926
+0.022681
+0.021584
+0.021729
+0.021721
+0.026007
+0.021730
+0.021921
+0.025122
+0.022560
+0.021969
+0.021805
+0.020826
+0.021144
+0.020833
+0.020989

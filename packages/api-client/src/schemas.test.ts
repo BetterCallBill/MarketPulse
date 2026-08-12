@@ -1,0 +1,187 @@
+import { describe, expect, it } from 'vitest';
+import {
+  alertRuleSchema,
+  candlesSchema,
+  notificationPushSchema,
+  notificationSchema,
+  portfolioSchema,
+  sparklinesSchema,
+  tickSchema,
+  transactionSchema,
+  watchlistSchema,
+} from './schemas';
+
+describe('watchlistSchema', () => {
+  it('accepts a well-formed watchlist', () => {
+    const parsed = watchlistSchema.parse({
+      id: '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+      items: [{ ticker: 'IVV', addedUtc: '2026-07-31T00:00:00+00:00' }],
+    });
+
+    expect(parsed.items[0]?.ticker).toBe('IVV');
+  });
+
+  it('rejects a payload missing items', () => {
+    expect(() => watchlistSchema.parse({ id: 'x' })).toThrow();
+  });
+});
+
+describe('tickSchema', () => {
+  it('accepts a well-formed tick', () => {
+    const parsed = tickSchema.parse({
+      ticker: 'NDQ',
+      price: 54.31,
+      timestampUtc: '2026-07-31T00:00:01+00:00',
+    });
+
+    expect(parsed.price).toBeCloseTo(54.31);
+  });
+
+  it('rejects a tick whose price is a string', () => {
+    expect(() =>
+      tickSchema.parse({ ticker: 'NDQ', price: '54.31', timestampUtc: 'x' }),
+    ).toThrow();
+  });
+});
+
+describe('alertRuleSchema', () => {
+  it('parses a rule as the API serialises it', () => {
+    const rule = alertRuleSchema.parse({
+      id: 'a1',
+      ticker: 'IVV',
+      direction: 'Above',
+      threshold: 65.5,
+      status: 'Active',
+      createdUtc: '2026-08-05T00:00:00+00:00',
+      triggeredUtc: null,
+      triggeredPrice: null,
+    });
+
+    expect(rule.direction).toBe('Above');
+  });
+
+  it('rejects a direction outside Above/Below', () => {
+    expect(() =>
+      alertRuleSchema.parse({
+        id: 'a1',
+        ticker: 'IVV',
+        direction: 'Sideways',
+        threshold: 65.5,
+        status: 'Active',
+        createdUtc: '2026-08-05T00:00:00+00:00',
+        triggeredUtc: null,
+        triggeredPrice: null,
+      }),
+    ).toThrow();
+  });
+});
+
+describe('notification schemas', () => {
+  it('parses an API row including its read flag', () => {
+    const n = notificationSchema.parse({
+      id: 'n1',
+      alertRuleId: 'a1',
+      ticker: 'IVV',
+      direction: 'Above',
+      threshold: 60,
+      triggeredPrice: 61.2,
+      occurredUtc: '2026-08-05T00:00:00+00:00',
+      isRead: false,
+    });
+
+    expect(n.isRead).toBe(false);
+  });
+
+  it('parses a hub push, which carries no read flag', () => {
+    const p = notificationPushSchema.parse({
+      id: 'n1',
+      alertRuleId: 'a1',
+      ticker: 'IVV',
+      direction: 'Above',
+      threshold: 60,
+      triggeredPrice: 61.2,
+      occurredUtc: '2026-08-05T00:00:00+00:00',
+    });
+
+    expect(p.ticker).toBe('IVV');
+  });
+});
+
+describe('portfolio schemas', () => {
+  it('parses a portfolio as the API serialises it', () => {
+    const p = portfolioSchema.parse({
+      holdings: [
+        { ticker: 'IVV', units: 10.5, averageCost: 60.25, realisedPnL: 100 },
+      ],
+      totalRealisedPnL: 100,
+    });
+
+    expect(p.holdings[0]?.ticker).toBe('IVV');
+    expect(p.totalRealisedPnL).toBe(100);
+  });
+
+  it('parses a transaction and rejects a bad side', () => {
+    const t = transactionSchema.parse({
+      id: 't1',
+      ticker: 'IVV',
+      side: 'Buy',
+      units: 10,
+      price: 60,
+      occurredUtc: '2026-08-05T00:00:00+00:00',
+      recordedUtc: '2026-08-05T00:00:00+00:00',
+    });
+
+    expect(t.side).toBe('Buy');
+
+    expect(() => transactionSchema.parse({ ...t, side: 'Hold' })).toThrow();
+  });
+});
+
+describe('candlesSchema', () => {
+  it('parses a valid candles payload', () => {
+    const parsed = candlesSchema.parse({
+      ticker: 'IVV',
+      interval: '1m',
+      candles: [{ t: '2026-08-06T10:00:00+00:00', o: 10, h: 12, l: 9, c: 11 }],
+    });
+    expect(parsed.candles[0]?.c).toBe(11);
+  });
+
+  it('rejects an unknown interval', () => {
+    expect(() =>
+      candlesSchema.parse({ ticker: 'IVV', interval: '42s', candles: [] }),
+    ).toThrow();
+  });
+
+  it('rejects a candle with a non-numeric price', () => {
+    expect(() =>
+      candlesSchema.parse({
+        ticker: 'IVV',
+        interval: '1m',
+        candles: [{ t: '2026-08-06T10:00:00+00:00', o: 'ten', h: 12, l: 9, c: 11 }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects a candle whose timestamp is not a valid datetime', () => {
+    expect(() =>
+      candlesSchema.parse({
+        ticker: 'IVV',
+        interval: '1m',
+        candles: [{ t: 'not-a-date', o: 10, h: 12, l: 9, c: 11 }],
+      }),
+    ).toThrow();
+  });
+});
+
+describe('sparklinesSchema', () => {
+  it('parses a ticker-to-closes record, including empty arrays', () => {
+    const parsed = sparklinesSchema.parse({ sparklines: { IVV: [1.5, 2.5], NDQ: [] } });
+    expect(parsed.sparklines['IVV']).toEqual([1.5, 2.5]);
+    expect(parsed.sparklines['NDQ']).toEqual([]);
+  });
+
+  it('rejects non-numeric closes', () => {
+    expect(() => sparklinesSchema.parse({ sparklines: { IVV: ['high'] } })).toThrow();
+  });
+});

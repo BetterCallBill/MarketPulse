@@ -1,0 +1,82 @@
+import { expect, test } from '@playwright/test';
+
+const PASSWORD = 'correct horse battery staple';
+
+function uniqueEmail(): string {
+  return `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@marketpulse.local`;
+}
+
+test('a new user can register, add a ticker, watch it tick, and sign out', async ({ page }) => {
+  const email = uniqueEmail();
+
+  await page.goto('/register');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Create account' }).click();
+
+  // Registration lands on the protected watchlist.
+  await expect(page.getByRole('heading', { name: 'Watchlist' })).toBeVisible();
+
+  // A fresh account has an empty watchlist. Asserting the empty-state copy rather than
+  // a zero count means the assertion fails if the table silently stops rendering.
+  await expect(page.getByText('No tickers yet. Add one above to start streaming prices.'))
+    .toBeVisible();
+
+  await page.getByLabel('Add ticker').fill('IVV');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(page.getByText('IVV')).toBeVisible();
+  await expect(page.getByRole('row')).toHaveCount(2); // header row + IVV
+
+  // The price cell is fed by SignalR, which authenticated off the same cookie. If the
+  // hub rejected the connection this stays at the em-dash placeholder forever.
+  // PriceCell already exposes aria-label={`${ticker} price`} — no source change needed.
+  // Exact match: the ticker's watchlist-row link now carries aria-label
+  // "IVV price history" (slice 7b), which a non-exact getByLabel('IVV price') also
+  // matches as a substring — ambiguous without `exact`.
+  await expect(page.getByLabel('IVV price', { exact: true })).toHaveText(/^\$\d/, {
+    timeout: 15_000,
+  });
+
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+
+  // The protected route is genuinely closed now, not merely hidden.
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+});
+
+test('the session survives a full page reload', async ({ page }) => {
+  const email = uniqueEmail();
+
+  await page.goto('/register');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: 'Watchlist' })).toBeVisible();
+
+  await page.reload();
+
+  // No re-login: the cookie outlived the page, which is the entire point of not
+  // holding the token in JavaScript memory.
+  await expect(page.getByRole('heading', { name: 'Watchlist' })).toBeVisible();
+});
+
+test('signing in with the wrong password shows an error and stays on the login page', async ({
+  page,
+}) => {
+  const email = uniqueEmail();
+
+  await page.goto('/register');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: 'Watchlist' })).toBeVisible();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill('definitely the wrong password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+
+  await expect(page.getByRole('alert')).toContainText(/incorrect/i);
+  await expect(page).toHaveURL(/\/login$/);
+});

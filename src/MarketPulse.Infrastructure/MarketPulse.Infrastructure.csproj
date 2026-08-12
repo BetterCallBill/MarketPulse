@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\MarketPulse.Application\MarketPulse.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <PackageReference Include="OpenTelemetry.Api" />
+    <PackageReference Include="RabbitMQ.Client" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    Exposes RabbitMqTickSink's internal test-only constructor overload, which lets
+    RabbitMqTickSinkTests substitute a counting spy for RabbitMqConnection.CreateChannelAsync
+    to assert single-flight behaviour. RabbitMqConnection itself stays sealed and unchanged.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="MarketPulse.UnitTests" />
+  </ItemGroup>
+
+</Project>

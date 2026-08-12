@@ -1,1 +1,26 @@
 .DS_Store
+
+# .NET
+bin/
+obj/
+*.user
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Env
+.env
+.env.local
+
+# Playwright
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/blob-report/
+tests/e2e/.alerts-worker.pid
+
+# Terraform
+infra/**/.terraform/
+*.tfstate
+*.tfstate.*

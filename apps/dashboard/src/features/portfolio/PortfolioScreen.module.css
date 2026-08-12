@@ -1,0 +1,44 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-5);
+}
+
+.heading {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.sectionHeading {
+  margin: 0 0 var(--mp-space-2);
+  font-size: 1rem;
+}
+
+.historyList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.historyItem {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--mp-space-2);
+  padding: var(--mp-space-2) 0;
+  border-bottom: 1px solid var(--mp-border-subtle);
+}
+
+.historyItem:last-child {
+  border-bottom: none;
+}
+
+.historyItem time {
+  color: var(--mp-text-muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.empty {
+  margin: 0;
+  color: var(--mp-text-muted);
+}

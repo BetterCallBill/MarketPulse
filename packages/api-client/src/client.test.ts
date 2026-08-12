@@ -1,0 +1,299 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError, createApiClient } from './client';
+
+const BASE = 'http://api.test';
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+describe('createApiClient', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    // The CSRF cookie is readable by JavaScript by design — that is the "double submit".
+    vi.stubGlobal('document', { cookie: 'mp_csrf=nonce-123' });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sends credentials so the httpOnly cookies travel', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'w1', items: [] }));
+
+    await createApiClient(BASE).getWatchlist();
+
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: 'include' });
+  });
+
+  it('attaches the CSRF header to mutations', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'w1', items: [] }));
+
+    await createApiClient(BASE).addItem('IVV');
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((init.headers as Record<string, string>)['X-CSRF-Token']).toBe('nonce-123');
+  });
+
+  it('does not attach the CSRF header to reads', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'w1', items: [] }));
+
+    await createApiClient(BASE).getWatchlist();
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((init.headers as Record<string, string>)['X-CSRF-Token']).toBeUndefined();
+  });
+
+  it('every request carries a unique X-Correlation-Id', async () => {
+    fetchMock.mockImplementation(() => jsonResponse({ id: 'w1', items: [] }));
+
+    const client = createApiClient(BASE);
+    await client.getWatchlist();
+    await client.getWatchlist();
+
+    const headers1 = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
+    const headers2 = (fetchMock.mock.calls[1]?.[1] as RequestInit).headers as Record<string, string>;
+    expect(headers1['X-Correlation-Id']).toBeTruthy();
+    expect(headers2['X-Correlation-Id']).toBeTruthy();
+    expect(headers1['X-Correlation-Id']).not.toBe(headers2['X-Correlation-Id']);
+  });
+
+  it('refreshes once and retries when a request returns 401', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ title: 'unauthenticated', status: 401 }, 401))
+      .mockResolvedValueOnce(jsonResponse({ id: 'u1', email: 'a@b.com' })) // refresh
+      .mockResolvedValueOnce(jsonResponse({ id: 'w1', items: [] })); // retry
+
+    const watchlist = await createApiClient(BASE).getWatchlist();
+
+    expect(watchlist.items).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`${BASE}/api/v1/auth/refresh`);
+  });
+
+  it('gives up after one failed refresh rather than looping', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ title: 'unauthenticated', status: 401 }, 401))
+      .mockResolvedValueOnce(jsonResponse({ title: 'session-revoked', status: 401 }, 401));
+
+    const client = createApiClient(BASE);
+
+    await expect(client.getWatchlist()).rejects.toBeInstanceOf(ApiError);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshes only once for concurrent 401s', async () => {
+    // Three parallel requests hitting an expired token must produce ONE refresh call,
+    // not three. This is what the single-flight promise is for.
+    fetchMock.mockImplementation((url: string) => {
+      if (url.endsWith('/auth/refresh')) {
+        return Promise.resolve(jsonResponse({ id: 'u1', email: 'a@b.com' }));
+      }
+      if (fetchMock.mock.calls.filter((c) => !String(c[0]).endsWith('/auth/refresh')).length <= 3) {
+        return Promise.resolve(jsonResponse({ title: 'unauthenticated', status: 401 }, 401));
+      }
+      return Promise.resolve(jsonResponse({ id: 'w1', items: [] }));
+    });
+
+    const client = createApiClient(BASE);
+    await Promise.all([client.getWatchlist(), client.getWatchlist(), client.getWatchlist()]);
+
+    const refreshCalls = fetchMock.mock.calls.filter((c) =>
+      String(c[0]).endsWith('/auth/refresh'),
+    );
+    expect(refreshCalls).toHaveLength(1);
+  });
+
+  it('does not try to refresh a failed login', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ title: 'invalid-credentials', status: 401 }, 401),
+    );
+
+    await expect(
+      createApiClient(BASE).login('a@b.com', 'wrong password here'),
+    ).rejects.toBeInstanceOf(ApiError);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces the problem details title as the error code', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        { title: 'duplicate-ticker', status: 409, detail: 'nope', correlationId: 'abc' },
+        409,
+      ),
+    );
+
+    await expect(createApiClient(BASE).addItem('IVV')).rejects.toMatchObject({
+      status: 409,
+      errorCode: 'duplicate-ticker',
+      correlationId: 'abc',
+    });
+  });
+
+  it('parses the alert list and hits the alerts endpoint', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        {
+          id: 'a1',
+          ticker: 'IVV',
+          direction: 'Above',
+          threshold: 60,
+          status: 'Active',
+          createdUtc: '2026-08-05T00:00:00+00:00',
+          triggeredUtc: null,
+          triggeredPrice: null,
+        },
+      ]),
+    );
+
+    const rules = await createApiClient(BASE).getAlerts();
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${BASE}/api/v1/alerts`);
+    expect(rules[0]?.status).toBe('Active');
+  });
+
+  it('re-arms by id with the CSRF header attached', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        id: 'a1',
+        ticker: 'IVV',
+        direction: 'Above',
+        threshold: 60,
+        status: 'Active',
+        createdUtc: '2026-08-05T00:00:00+00:00',
+        triggeredUtc: null,
+        triggeredPrice: null,
+      }),
+    );
+
+    await createApiClient(BASE).rearmAlert('a1');
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${BASE}/api/v1/alerts/a1/rearm`);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((init.headers as Record<string, string>)['X-CSRF-Token']).toBe('nonce-123');
+  });
+
+  it('marks a notification read against its own id', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await createApiClient(BASE).markNotificationRead('n1');
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${BASE}/api/v1/notifications/n1/read`);
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).method).toBe('POST');
+  });
+
+  // Navigation-safe: a page unload must not abort this specific POST — it's the one
+  // "must survive navigation" call, which is otherwise worked around in the e2e suite
+  // with waitForResponse.
+  it('marks a notification read with keepalive so a reload cannot abort it', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await createApiClient(BASE).markNotificationRead('n1');
+
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).keepalive).toBe(true);
+  });
+
+  it('records a trade with the idempotency and CSRF headers attached', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ holdings: [], totalRealisedPnL: 0 }, 201),
+    );
+
+    await createApiClient(BASE).recordTransaction(
+      { ticker: 'IVV', side: 'Buy', units: 10, price: 60 },
+      'key-123',
+    );
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${BASE}/api/v1/portfolio/transactions`);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.method).toBe('POST');
+    const headers = init.headers as Record<string, string>;
+    expect(headers['Idempotency-Key']).toBe('key-123');
+    expect(headers['X-CSRF-Token']).toBe('nonce-123');
+    expect(JSON.parse(init.body as string)).toEqual({
+      ticker: 'IVV',
+      side: 'Buy',
+      units: 10,
+      price: 60,
+    });
+  });
+
+  it('pages transactions with skip and take', async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+
+    await createApiClient(BASE).getTransactions(20, 10);
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      `${BASE}/api/v1/portfolio/transactions?skip=20&take=10`,
+    );
+  });
+
+  it('parses the portfolio from getPortfolio', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        holdings: [{ ticker: 'IVV', units: 10, averageCost: 60, realisedPnL: 0 }],
+        totalRealisedPnL: 0,
+      }),
+    );
+
+    const portfolio = await createApiClient(BASE).getPortfolio();
+
+    expect(portfolio.holdings[0]?.averageCost).toBe(60);
+  });
+
+  describe('price history', () => {
+    it('getCandles hits the right URL and parses the response', async () => {
+      let seenUrl = '';
+      fetchMock.mockImplementation((url: string) => {
+        seenUrl = url;
+        return Promise.resolve(
+          jsonResponse({
+            ticker: 'IVV',
+            interval: '5m',
+            candles: [{ t: '2026-08-06T10:00:00+00:00', o: 10, h: 12, l: 9, c: 11 }],
+          }),
+        );
+      });
+
+      const result = await createApiClient(BASE).getCandles(
+        'IVV', '5m', '2026-08-06T04:00:00.000Z', '2026-08-06T10:00:00.000Z',
+      );
+
+      expect(result.candles).toHaveLength(1);
+      const url = new URL(seenUrl);
+      expect(url.pathname).toBe('/api/v1/prices/IVV/candles');
+      expect(url.searchParams.get('interval')).toBe('5m');
+      expect(url.searchParams.get('from')).toBe('2026-08-06T04:00:00.000Z');
+      expect(url.searchParams.get('to')).toBe('2026-08-06T10:00:00.000Z');
+    });
+
+    it('getCandles surfaces the unknown-ticker slug as ApiError', async () => {
+      fetchMock.mockResolvedValue(
+        new Response(
+          JSON.stringify({ title: 'unknown-ticker', status: 404, detail: "Ticker 'ZZZZ' is not a known instrument." }),
+          { status: 404, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      );
+
+      await expect(
+        createApiClient(BASE).getCandles('ZZZZ', '1m', '2026-08-06T04:00:00.000Z', '2026-08-06T10:00:00.000Z'),
+      ).rejects.toMatchObject({ status: 404, errorCode: 'unknown-ticker' });
+    });
+
+    it('getSparklines parses the batch payload', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse({ sparklines: { IVV: [101, 102] } }),
+      );
+
+      const result = await createApiClient(BASE).getSparklines();
+
+      expect(result.sparklines['IVV']).toEqual([101, 102]);
+    });
+  });
+});
